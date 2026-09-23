@@ -109,6 +109,9 @@ fn module_graph_is_acyclic_and_io_has_owners() {
     files(&root().join("src"), &mut source_files);
     let mut graph: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for file in source_files {
+        if file.extension().is_none_or(|ext| ext != "rs") {
+            continue;
+        }
         let rel = file.strip_prefix(root().join("src")).unwrap();
         let first = rel
             .components()
@@ -190,7 +193,7 @@ fn docs_examples_and_build_contracts_agree() {
     let _: PackageManifest = toml::from_str(include_str!("../examples/skill.toml")).unwrap();
     let requirements = include_str!("../codespec/requirements/skill-bom-cli.md");
     let tests = include_str!("../codespec/test/skill-bom-cli.md");
-    for id in 1..=13 {
+    for id in 1..=14 {
         assert!(requirements.contains(&format!("R{id:02}")));
         assert!(tests.contains(&format!("R{id:02}")));
     }
@@ -201,6 +204,11 @@ fn docs_examples_and_build_contracts_agree() {
     assert!(module.contains("1.97.1") && toolchain.contains("1.97.1"));
     assert_eq!(include_str!("../.bazelversion").trim(), "9.2.0");
     let build = include_str!("../BUILD.bazel");
+    let sources_build = include_str!("../src/sources/BUILD.bazel");
+    for adapter in ["archive", "git", "clawhub", "sources"] {
+        assert!(sources_build.contains(&format!("name = \"{adapter}\"")));
+    }
+    assert!(!build.contains("src/**/*.rs"));
     for test in [
         "config",
         "resolver",
@@ -216,6 +224,129 @@ fn docs_examples_and_build_contracts_agree() {
         root().join("MODULE.bazel.lock").is_file(),
         "Bazel module lock must be generated and checked in"
     );
+}
+#[test]
+fn book_is_navigable_and_skill_matches_release() {
+    fn lexical(path: &Path) -> PathBuf {
+        let mut normalized = PathBuf::new();
+        for part in path.components() {
+            if part == std::path::Component::ParentDir {
+                normalized.pop();
+            } else if part != std::path::Component::CurDir {
+                normalized.push(part.as_os_str());
+            }
+        }
+        normalized
+    }
+    let root = root();
+    let docs = root.join("docs").canonicalize().unwrap();
+    let mut all = vec![];
+    files(&docs, &mut all);
+    let chapters: Vec<_> = all
+        .into_iter()
+        .filter(|p| p.extension().is_some_and(|e| e == "md"))
+        .collect();
+    assert!(chapters.len() >= 12, "expected a multi-chapter book");
+    let mut reachable = BTreeSet::new();
+    let mut pending = vec![docs.join("README.md")];
+    while let Some(path) = pending.pop() {
+        let path = lexical(&path);
+        if !reachable.insert(path.clone()) {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(
+            text.lines()
+                .filter(|l| l.trim_start().starts_with("```"))
+                .count()
+                % 2,
+            0,
+            "unclosed code fence in {}",
+            path.display()
+        );
+        for tail in text.split("](").skip(1) {
+            let target = tail.split_once(')').unwrap().0.split('#').next().unwrap();
+            if target.is_empty() || target.contains("://") || target.starts_with("mailto:") {
+                continue;
+            }
+            let dest = path.parent().unwrap().join(target);
+            assert!(
+                dest.is_file(),
+                "broken book link {} from {}",
+                target,
+                path.display()
+            );
+            let resolved = lexical(&dest);
+            if resolved.starts_with(&docs) && resolved.extension().is_some_and(|e| e == "md") {
+                pending.push(resolved);
+            }
+        }
+    }
+    for chapter in chapters {
+        assert!(
+            reachable.contains(&lexical(&chapter)),
+            "unreachable chapter {}",
+            chapter.display()
+        );
+    }
+    let skill = std::fs::read_to_string(root.join("skills/skill-bom-cli/SKILL.md")).unwrap();
+    let package: PackageManifest = toml::from_str(
+        &std::fs::read_to_string(root.join("skills/skill-bom-cli/skill.toml")).unwrap(),
+    )
+    .unwrap();
+    let cargo: toml::Value = toml::from_str(include_str!("../Cargo.toml")).unwrap();
+    let version = cargo["package"]["version"].as_str().unwrap();
+    assert_eq!(package.package.version, version);
+    assert_eq!(package.package.name, "skill-bom-cli");
+    assert!(skill.contains(&format!("  version: \"{version}\"")));
+}
+#[cfg(target_os = "linux")]
+#[test]
+fn skill_release_archive_is_complete_and_reproducible() {
+    use std::process::Command;
+    let temp = tempfile::tempdir().unwrap();
+    let binary = temp.path().join("skill-bom");
+    std::fs::write(&binary, b"stand-in executable").unwrap();
+    let script = root().join("scripts/package-skill.sh");
+    let skill = root().join("skills/skill-bom-cli");
+    let first = temp.path().join("first.tar.gz");
+    let second = temp.path().join("second.tar.gz");
+    for archive in [&first, &second] {
+        let result = Command::new("bash")
+            .arg(&script)
+            .arg(archive)
+            .arg(&skill)
+            .args(["Linux", "X64"])
+            .arg(&binary)
+            .status()
+            .unwrap();
+        assert!(result.success());
+    }
+    assert_eq!(
+        std::fs::read(&first).unwrap(),
+        std::fs::read(&second).unwrap()
+    );
+    let gz = flate2::read::GzDecoder::new(std::fs::File::open(first).unwrap());
+    let mut archive = tar::Archive::new(gz);
+    let names: BTreeSet<_> = archive
+        .entries()
+        .unwrap()
+        .map(|entry| {
+            entry
+                .unwrap()
+                .path()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    for required in [
+        "skill-bom-cli/SKILL.md",
+        "skill-bom-cli/skill.toml",
+        "skill-bom-cli/assets/Linux/X64/skill-bom",
+    ] {
+        assert!(names.contains(required), "missing {required}");
+    }
 }
 #[test]
 fn bom_checksums_unknowns_and_reference_integrity() {

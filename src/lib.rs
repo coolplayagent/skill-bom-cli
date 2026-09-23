@@ -1,9 +1,15 @@
 #![forbid(unsafe_code)]
 pub mod application;
+#[path = "sources/archive.rs"]
+pub mod archive;
 pub mod bom;
+#[path = "sources/clawhub.rs"]
+pub mod clawhub;
 pub mod config;
 pub mod domain;
 pub mod env;
+#[path = "sources/git.rs"]
+pub mod git;
 pub mod installer;
 pub mod interfaces;
 pub mod net;

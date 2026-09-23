@@ -1,0 +1,53 @@
+load("@rules_rust//rust:defs.bzl", "rust_library")
+load("@crates//:defs.bzl", "all_crate_deps", "aliases")
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "source_files",
+    srcs = glob(["*.rs"]),
+)
+
+rust_library(
+    name = "archive",
+    crate_name = "skill_bom_source_archive",
+    crate_root = "bazel_archive.rs",
+    srcs = ["bazel_archive.rs", "archive.rs"],
+    edition = "2024",
+    deps = ["//:foundation"] + all_crate_deps(normal = True, package_name = ""),
+    proc_macro_deps = all_crate_deps(proc_macro = True, package_name = ""),
+    aliases = aliases(normal = True, proc_macro = True, package_name = ""),
+)
+
+rust_library(
+    name = "git",
+    crate_name = "skill_bom_source_git",
+    crate_root = "bazel_git.rs",
+    srcs = ["bazel_git.rs", "git.rs"],
+    edition = "2024",
+    deps = ["//:foundation"] + all_crate_deps(normal = True, package_name = ""),
+    proc_macro_deps = all_crate_deps(proc_macro = True, package_name = ""),
+    aliases = aliases(normal = True, proc_macro = True, package_name = ""),
+)
+
+rust_library(
+    name = "clawhub",
+    crate_name = "skill_bom_source_clawhub",
+    crate_root = "bazel_clawhub.rs",
+    srcs = ["bazel_clawhub.rs", "clawhub.rs"],
+    edition = "2024",
+    deps = ["//:foundation"] + all_crate_deps(normal = True, package_name = ""),
+    proc_macro_deps = all_crate_deps(proc_macro = True, package_name = ""),
+    aliases = aliases(normal = True, proc_macro = True, package_name = ""),
+)
+
+rust_library(
+    name = "sources",
+    crate_name = "skill_bom_sources",
+    crate_root = "bazel_lib.rs",
+    srcs = ["bazel_lib.rs", "mod.rs"],
+    edition = "2024",
+    deps = ["//:foundation", ":archive", ":git", ":clawhub"] + all_crate_deps(normal = True, package_name = ""),
+    proc_macro_deps = all_crate_deps(proc_macro = True, package_name = ""),
+    aliases = aliases(normal = True, proc_macro = True, package_name = ""),
+)

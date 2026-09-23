@@ -1,7 +1,8 @@
 //! Source adapters implement the resolver's I/O-free provider contract.
-pub mod clawhub;
-pub mod git;
+pub use crate::archive;
+pub use crate::clawhub;
 use crate::domain::*;
+pub use crate::git;
 use crate::{config::Manifest, net::Http, paths, store};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -126,33 +127,8 @@ impl SourceProvider for Provider<'_> {
         let temp = tempfile::tempdir()?;
         let (root, actual, evidence) = match source {
             Source::Archive { url } => {
-                let bytes = self.http.get(url, None)?.bytes;
-                let hash = digest(&bytes);
-                if request
-                    .sha256
-                    .as_deref()
-                    .map(str::to_ascii_lowercase)
-                    .as_deref()
-                    != Some(&hash)
-                {
-                    return fail(
-                        "CHECKSUM_MISMATCH",
-                        "Archive SHA-256 differs from declaration",
-                    );
-                }
-                store::extract(&bytes, temp.path())?;
-                let root = match &request.subdir {
-                    Some(p) => temp.path().join(paths::relative(p)?),
-                    None => temp.path().to_path_buf(),
-                };
-                (
-                    root,
-                    candidate.clone(),
-                    Evidence {
-                        archive_sha256: Some(hash),
-                        ..Evidence::default()
-                    },
-                )
+                let (root, evidence) = archive::fetch(&self.http, url, request, temp.path())?;
+                (root, candidate.clone(), evidence)
             }
             Source::Git { repository, subdir } => {
                 git::fetch(repository, subdir, candidate, temp.path())?;

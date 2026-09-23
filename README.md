@@ -6,12 +6,17 @@ It never executes Skill content, installs runtime tools, configures MCP, or
 publishes to a registry. `skill.toml` is this project's dependency protocol,
 not a ClawHub standard.
 
+The [book](docs/README.md) is the user and contributor guide. The
+[CLI Skill](skills/skill-bom-cli/SKILL.md) wraps the executable for Agent use;
+the release archive publishes that Skill together with platform binaries.
+
 Requires Git for Git sources. Rust 1.97.1, Bazel 9.2.0 and rules_rust 0.74.0 are
 pinned. Cargo.lock owns the dependency graph used by both build entry points.
 
 ```sh
 cargo build --locked
 bazel build --lockfile_mode=error //:skill-bom
+bazel build --lockfile_mode=error //:skill-package
 skill-bom init
 # Edit skills.toml; see examples/skills.toml.
 skill-bom validate

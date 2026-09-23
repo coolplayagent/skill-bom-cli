@@ -1,6 +1,6 @@
 # Skill BOM CLI design
 
-See [requirements R01–R13](../requirements/skill-bom-cli.md) and
+See [requirements R01–R14](../requirements/skill-bom-cli.md) and
 [test contract](../test/skill-bom-cli.md). Rust library modules are reusable;
 the binary installs interruption handling and delegates parsing/orchestration.
 
@@ -145,3 +145,13 @@ standard candidate/metadata boundary. `config`, `sources`, `store`, `installer`,
 Clap/output rendering. `env`, `paths`, `net`, `process` centralize environment,
 path confinement, HTTP and subprocess APIs. The Rust quality test checks the
 module import graph, domain I/O prohibition and reserved boundary imports.
+
+Cargo composes these modules through `src/lib.rs`. Bazel compiles shared
+contracts/I/O boundaries in `//:foundation`, archive, Git and ClawHub adapters
+separately in `//src/sources:archive`, `:git` and `:clawhub`, their provider in `:sources`, then links
+`//:skill_bom`. Bazel-only entry points re-export the same public module paths;
+the source files have one implementation. The narrow `srcs` sets preserve action
+cache hits for untouched adapters. `//:skill-package` packages a native CLI with
+the Skill descriptor. A version tag assembles native runner binaries into one
+Skill archive with a SHA-256 manifest. The [book](../../docs/README.md) covers
+user workflows and contributor operations; CodeSpec retains normative contracts.

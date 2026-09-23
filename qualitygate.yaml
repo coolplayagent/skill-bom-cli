@@ -50,7 +50,7 @@ checks:
     timeout_seconds: 900
   - id: bazel-build
     kind: command
-    argv: [bazel, build, "--lockfile_mode=error", "//:skill-bom"]
+    argv: [bazel, build, "--lockfile_mode=error", "//:skill-bom", "//:skill-package"]
     depends_on: [bazel-lock]
     timeout_seconds: 900
   - id: bazel-test
@@ -81,6 +81,10 @@ verification_assets:
   - MODULE.bazel
   - MODULE.bazel.lock
   - BUILD.bazel
+  - src/sources/BUILD.bazel
+  - docs/**
+  - skills/**
+  - scripts/**
   - .bazelversion
   - .bazelrc
   - tests/**

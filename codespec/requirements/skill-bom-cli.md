@@ -22,6 +22,7 @@ See [design](../design/skill-bom-cli.md) and [test evidence](../test/skill-bom-c
 | R11 | Explicit lock/installed BOM views, complete graph and evidence scopes, unknown metadata, user supplements, drift diagnostics, deterministic UTC timestamps, no secrets or absolute target paths. |
 | R12 | SPDX 2.3 official Schema, unique identifiers/references, root DESCRIBES and DEPENDS_ON edges, no invented PURL, filesAnalyzed false, archive/tree checksum distinction and NOASSERTION for unknown licensing. |
 | R13 | Pinned Cargo/Bazel graph and toolchains; independent unit/integration gates, >=90% Rust line coverage, Miri/ASan, architecture and file budgets, Linux/macOS/Windows CI and truthful final Qualitygate evidence. |
+| R14 | Archive, Git and ClawHub source adapters and source orchestration are separate Bazel `rust_library` compilation units with Cargo API parity; a version-matched CLI Skill plus platform binaries forms one verified release archive, and a navigable book documents use, formats, architecture and verification. |
 
 Required CLI commands are init, validate, lock, update [alias], install, tree,
 why, list, verify and bom. Install supports locked/frozen/dry-run; common options

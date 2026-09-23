@@ -20,6 +20,7 @@ it does not predeclare passing results. Actual runs are recorded separately in
 | R11 | cli/quality: deterministic timestamp and graph, installed view with drift, unknown metadata, no absolute paths |
 | R12 | cli/quality: pinned official SPDX 2.3 Schema, relationship references, checksum scope and NOASSERTION |
 | R13 | quality: architecture DAG, I/O boundaries, authored file budget, docs/examples/Schemas, Cargo/Bazel toolchain alignment; independent CI gates |
+| R14 | quality: source Bazel target boundaries, book reachability and links, Skill/Cargo version agreement, deterministic archive contents; Bazel builds CLI and Skill package, release workflow checks each native binary |
 
 Unit tests (`cargo test --locked --lib --bins --all-features`) and integration
 tests (`cargo test --locked --tests --all-features`) are separate entry points.
@@ -36,7 +37,8 @@ are coded in tests/sources.rs and are deliberately independent of the live
 service. The transport mock supplies a fixed GitHub archive; it verifies no token
 is sent to GitHub. Live smoke runs are opt-in and report availability gaps.
 
-Bazel exposes //:skill-bom, //:unit_tests and each integration target; all consume
+Bazel exposes //:skill-bom, //:skill-package, //:unit_tests, separate source
+adapter libraries and each integration target; all consume
 Cargo.lock. Final commands use --lockfile_mode=error. Coverage must meet 90 percent
 of Rust lines. Nightly Miri runs only pure domain unit tests; ASan runs native
 unit tests with a separate target directory. These are not substituted for stable
