@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "chains": {
+      "items": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "type": "array"
+    },
+    "code": {
+      "type": "string"
+    },
+    "exit_code": {
+      "format": "uint8",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "hint": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "package": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "phase": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "chains",
+    "code",
+    "exit_code",
+    "hint",
+    "message",
+    "phase"
+  ],
+  "title": "Error",
+  "type": "object"
+}

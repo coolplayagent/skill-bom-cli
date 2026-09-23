@@ -1,0 +1,10 @@
+schema_version = 1
+[package]
+name = "code-review"
+version = "1.2.0"
+description = "Review code changes"
+license = "MIT"
+[dependencies.git-context]
+registry = "clawhub"
+package = "@example/git-context"
+version = "^1.0"

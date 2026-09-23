@@ -1,0 +1,34 @@
+schema_version: 1
+id: authored-file-budget
+version: 1
+source:
+  document: AGENTS.md
+  section: File budget
+  content_hash: sha256:2f2c4bc7f07205314cefe75fb40d08baab48d03c4b663dee4e976a433ca7a423
+language: []
+required: true
+severity: error
+applies_to:
+  paths:
+  - src/**/*.rs
+  - tests/**/*.rs
+  - '**/*.md'
+  - '**/*.toml'
+  - '**/*.bazel'
+  - '**/*.bzl'
+  - .github/workflows/*.yml
+  provenance_scope: null
+requires_capabilities:
+- files
+binding: null
+when:
+  entity: file
+  change: all
+then:
+  require_marker: false
+  require_dependency: null
+  name_pattern: null
+  forbid_pattern: null
+  max_count: null
+  max_lines: 1000
+fix: Split authored files by responsibility so each remains within 1000 lines. Generated lockfiles and JSON Schemas are exempt.

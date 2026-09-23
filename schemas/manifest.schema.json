@@ -1,0 +1,192 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "definitions": {
+    "Dependency": {
+      "additionalProperties": false,
+      "properties": {
+        "git": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "package": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "registry": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rev": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subdir": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tag_pattern": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "Install": {
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "Project": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "Registry": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "token_env": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "url"
+      ],
+      "type": "object"
+    },
+    "Supplement": {
+      "additionalProperties": false,
+      "properties": {
+        "complete": {
+          "type": "boolean"
+        },
+        "dependencies": {
+          "additionalProperties": {
+            "$ref": "#/definitions/Dependency"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/definitions/Dependency"
+        }
+      },
+      "required": [
+        "complete",
+        "name",
+        "source"
+      ],
+      "type": "object"
+    }
+  },
+  "properties": {
+    "dependencies": {
+      "additionalProperties": {
+        "$ref": "#/definitions/Dependency"
+      },
+      "default": {},
+      "type": "object"
+    },
+    "install": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Install"
+        }
+      ],
+      "default": {
+        "target": null
+      }
+    },
+    "package_metadata": {
+      "default": [],
+      "items": {
+        "$ref": "#/definitions/Supplement"
+      },
+      "type": "array"
+    },
+    "project": {
+      "$ref": "#/definitions/Project"
+    },
+    "registries": {
+      "additionalProperties": {
+        "$ref": "#/definitions/Registry"
+      },
+      "default": {},
+      "type": "object"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "minimum": 0.0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "project",
+    "schema_version"
+  ],
+  "title": "Manifest",
+  "type": "object"
+}

@@ -1,0 +1,466 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "definitions": {
+    "Candidate": {
+      "additionalProperties": false,
+      "properties": {
+        "revision": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "selector": {
+          "type": "string"
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "selector"
+      ],
+      "type": "object"
+    },
+    "Dependency": {
+      "additionalProperties": false,
+      "properties": {
+        "git": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "package": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "registry": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rev": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subdir": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tag_pattern": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "Edge": {
+      "additionalProperties": false,
+      "properties": {
+        "package": {
+          "type": "string"
+        },
+        "request": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "package",
+        "request"
+      ],
+      "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "archive_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "handoff": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Handoff"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scan": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Scan"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "upstream_hash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "upstream_hash_algorithm": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "FileRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "executable": {
+          "type": "boolean"
+        },
+        "path": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "size": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "executable",
+        "path",
+        "sha256",
+        "size"
+      ],
+      "type": "object"
+    },
+    "Handoff": {
+      "additionalProperties": false,
+      "properties": {
+        "commit": {
+          "type": "string"
+        },
+        "content_hash": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "repo": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "commit",
+        "content_hash",
+        "path",
+        "repo"
+      ],
+      "type": "object"
+    },
+    "Lock": {
+      "additionalProperties": false,
+      "properties": {
+        "manifest_digest": {
+          "type": "string"
+        },
+        "packages": {
+          "additionalProperties": {
+            "$ref": "#/definitions/LockedPackage"
+          },
+          "type": "object"
+        },
+        "resolver_version": {
+          "type": "string"
+        },
+        "roots": {
+          "additionalProperties": {
+            "$ref": "#/definitions/Edge"
+          },
+          "type": "object"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "manifest_digest",
+        "packages",
+        "resolver_version",
+        "roots",
+        "schema_version"
+      ],
+      "type": "object"
+    },
+    "LockedPackage": {
+      "additionalProperties": false,
+      "properties": {
+        "acquisition": {
+          "$ref": "#/definitions/Dependency"
+        },
+        "candidate": {
+          "$ref": "#/definitions/Candidate"
+        },
+        "dependencies": {
+          "additionalProperties": {
+            "$ref": "#/definitions/Edge"
+          },
+          "type": "object"
+        },
+        "directory": {
+          "type": "string"
+        },
+        "evidence": {
+          "$ref": "#/definitions/Evidence"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/definitions/FileRecord"
+          },
+          "type": "array"
+        },
+        "metadata": {
+          "$ref": "#/definitions/Metadata"
+        },
+        "source": {
+          "$ref": "#/definitions/Source"
+        },
+        "tree_algorithm": {
+          "type": "string"
+        },
+        "tree_sha256": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "acquisition",
+        "candidate",
+        "dependencies",
+        "directory",
+        "evidence",
+        "files",
+        "metadata",
+        "source",
+        "tree_algorithm",
+        "tree_sha256"
+      ],
+      "type": "object"
+    },
+    "Metadata": {
+      "additionalProperties": false,
+      "properties": {
+        "dependencies": {
+          "additionalProperties": {
+            "$ref": "#/definitions/Dependency"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "dependency_metadata": {
+          "$ref": "#/definitions/MetadataKind"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "diagnostics": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "license": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "metadata_digest": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "dependency_metadata",
+        "name"
+      ],
+      "type": "object"
+    },
+    "MetadataKind": {
+      "enum": [
+        "upstream",
+        "user_complete",
+        "user_partial",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "Scan": {
+      "additionalProperties": false,
+      "properties": {
+        "observed_at": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "observed_at",
+        "status"
+      ],
+      "type": "object"
+    },
+    "Source": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "git"
+              ],
+              "type": "string"
+            },
+            "repository": {
+              "type": "string"
+            },
+            "subdir": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "repository",
+            "subdir"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "archive"
+              ],
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "url"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "clawhub"
+              ],
+              "type": "string"
+            },
+            "owner": {
+              "type": "string"
+            },
+            "registry": {
+              "type": "string"
+            },
+            "slug": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "owner",
+            "registry",
+            "slug"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "properties": {
+    "lock": {
+      "$ref": "#/definitions/Lock"
+    },
+    "lock_digest": {
+      "type": "string"
+    },
+    "owner": {
+      "type": "string"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "minimum": 0.0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "lock",
+    "lock_digest",
+    "owner",
+    "schema_version"
+  ],
+  "title": "Installed",
+  "type": "object"
+}

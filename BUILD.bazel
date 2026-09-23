@@ -1,0 +1,48 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
+load("@crates//:defs.bzl", "all_crate_deps", "aliases")
+package(default_visibility = ["//visibility:public"])
+filegroup(
+    name = "verification_inputs",
+    srcs = glob(["schemas/*.json", "examples/*.toml", "codespec/**/*.md", "src/**/*.rs", "tests/**/*.rs", ".github/workflows/*.yml", "qualitygate/**/*.yaml"]) + ["README.md", "Cargo.toml", "Cargo.lock", "MODULE.bazel", "MODULE.bazel.lock", "rust-toolchain.toml", ".bazelversion", "BUILD.bazel", "AGENTS.md", "qualitygate.yaml"],
+)
+rust_library(
+    name = "skill_bom",
+    crate_name = "skill_bom",
+    crate_root = "src/lib.rs",
+    srcs = glob(["src/**/*.rs"], exclude = ["src/main.rs"]),
+    edition = "2024",
+    version = "0.1.0",
+    deps = all_crate_deps(normal = True),
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    aliases = aliases(normal = True, proc_macro = True),
+)
+rust_binary(
+    name = "skill-bom",
+    crate_root = "src/main.rs",
+    srcs = ["src/main.rs"],
+    edition = "2024",
+    version = "0.1.0",
+    deps = [":skill_bom"] + all_crate_deps(normal = True),
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+)
+rust_test(
+    name = "unit_tests",
+    crate = ":skill_bom",
+    deps = all_crate_deps(normal_dev = True),
+)
+[
+    rust_test(
+        name = name + "_test",
+        crate_root = "tests/" + name + ".rs",
+        srcs = ["tests/" + name + ".rs"] + glob(["tests/common/*.rs"]),
+        edition = "2024",
+        version = "0.1.0",
+        deps = [":skill_bom"] + all_crate_deps(normal = True, normal_dev = True),
+        proc_macro_deps = all_crate_deps(proc_macro = True),
+        compile_data = glob(["schemas/*.json", "examples/*.toml", "codespec/**/*.md", "src/**/*.rs", "tests/*.rs", ".github/workflows/*.yml"]) + ["Cargo.toml", "Cargo.lock", "MODULE.bazel", "MODULE.bazel.lock", "rust-toolchain.toml", ".bazelversion", "BUILD.bazel", "AGENTS.md"],
+        data = [":skill-bom", ":verification_inputs"],
+        rustc_env = {"CARGO_BIN_EXE_skill-bom": "$(rootpath :skill-bom)"},
+        env = {"SKILL_BOM_TEST_ROOT": "."},
+    )
+    for name in ["config", "resolver", "sources", "protocol", "transactions", "cli", "quality"]
+]

@@ -1,0 +1,23 @@
+schema_version = 1
+[project]
+name = "example-agent"
+[install]
+target = "./skills"
+[registries.clawhub]
+kind = "clawhub"
+url = "https://clawhub.ai"
+# token_env = "CLAWHUB_TOKEN"
+[dependencies.review]
+registry = "clawhub"
+package = "@example/code-review"
+version = "^1.2"
+[dependencies.release]
+git = "https://github.com/example/agent-skills.git"
+subdir = "skills/release"
+version = "~2.1"
+tag_pattern = "release-v{version}"
+[dependencies.docs]
+url = "https://example.org/skills/docs-1.0.0.zip"
+version = "=1.0.0"
+# Replace this illustrative checksum with the actual archive SHA-256.
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"

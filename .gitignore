@@ -1,0 +1,8 @@
+/target/
+/bazel-*
+/.qualitygate/
+/qualitygate-report.json
+/verification/
+
+/core
+/core.*

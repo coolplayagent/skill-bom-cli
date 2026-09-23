@@ -1,0 +1,4 @@
+common --enable_bzlmod
+# Cargo.lock pins every crate SHA-256; reuse that verified cache across mirrors.
+common --repo_env=BAZEL_HTTP_RULES_URLS_AS_DEFAULT_CANONICAL_ID=0
+test --test_output=errors

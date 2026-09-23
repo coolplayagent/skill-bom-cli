@@ -1,0 +1,89 @@
+schema_version: 1
+languages: [rust]
+rulesets: [core]
+exclude: ["target/**", "bazel-*/**", "verification/**", "core"]
+rules:
+  line-ending: {enabled: true, required: true, severity: error}
+checks:
+  - id: file-budget
+    kind: command
+    argv: [cargo, test, --locked, --test, quality, authored_files_are_bounded_and_rust_is_safe, --all-features]
+    timeout_seconds: 900
+  - id: format
+    kind: command
+    argv: [cargo, fmt, --all, --, --check]
+    timeout_seconds: 120
+  - id: check
+    kind: command
+    argv: [cargo, check, --locked, --all-targets, --all-features]
+    tools:
+      - {id: rustc, argv: [rustc, --version, --verbose]}
+      - {id: cargo, argv: [cargo, --version]}
+    timeout_seconds: 900
+  - id: clippy
+    kind: command
+    argv: [cargo, clippy, --locked, --all-targets, --all-features, --, -D, warnings]
+    depends_on: [check]
+    timeout_seconds: 900
+  - id: unit
+    kind: command
+    argv: [cargo, test, --locked, --lib, --bins, --all-features]
+    depends_on: [check]
+    timeout_seconds: 900
+  - id: integration
+    kind: command
+    argv: [cargo, test, --locked, --test, config, --test, resolver, --test, sources, --test, protocol, --test, transactions, --test, cli, --test, quality, --all-features]
+    depends_on: [check]
+    timeout_seconds: 900
+  - id: coverage
+    kind: command
+    argv: [cargo, llvm-cov, --locked, --all-targets, --all-features, --fail-under-lines, "90"]
+    tools:
+      - {id: llvm-cov, argv: [cargo, llvm-cov, --version]}
+    depends_on: [integration, unit]
+    timeout_seconds: 900
+  - id: bazel-lock
+    kind: command
+    argv: [bazel, mod, deps, "--lockfile_mode=error"]
+    tools:
+      - {id: bazel, argv: [bazel, --version]}
+    timeout_seconds: 900
+  - id: bazel-build
+    kind: command
+    argv: [bazel, build, "--lockfile_mode=error", "//:skill-bom"]
+    depends_on: [bazel-lock]
+    timeout_seconds: 900
+  - id: bazel-test
+    kind: command
+    argv: [bazel, test, "--lockfile_mode=error", "//..."]
+    depends_on: [bazel-build]
+    timeout_seconds: 900
+  - id: miri
+    kind: command
+    argv: [cargo, "+nightly-2026-09-01", miri, test, --locked, --lib, "domain::tests"]
+    timeout_seconds: 900
+  - id: asan
+    kind: command
+    argv: [env, "RUSTFLAGS=-Zsanitizer=address", "ASAN_OPTIONS=detect_leaks=1", "CARGO_TARGET_DIR=target/asan", cargo, "+nightly-2026-09-01", test, --locked, --lib, --target, x86_64-unknown-linux-gnu, "-Zbuild-std"]
+    timeout_seconds: 900
+profiles:
+  quick:
+    include: [line-ending, file-budget, format]
+  full:
+    include: [line-ending, file-budget, format, check, clippy, unit, integration, coverage, bazel-lock, bazel-build, bazel-test, miri, asan]
+verification_assets:
+  - qualitygate.yaml
+  - qualitygate/rules/**
+  - AGENTS.md
+  - Cargo.toml
+  - Cargo.lock
+  - rust-toolchain.toml
+  - MODULE.bazel
+  - MODULE.bazel.lock
+  - BUILD.bazel
+  - .bazelversion
+  - .bazelrc
+  - tests/**
+  - schemas/**
+  - codespec/**
+  - .github/workflows/**
