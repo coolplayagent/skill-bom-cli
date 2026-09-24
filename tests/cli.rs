@@ -23,6 +23,10 @@ fn run(root: &Path, args: &[&str]) -> Output {
         .env("APPDATA", root.join("config"))
         .env("LOCALAPPDATA", root.join("data"))
         .env("SOURCE_DATE_EPOCH", "1700000000")
+        .env("HTTP_PROXY", "http://127.0.0.1:1")
+        .env("ALL_PROXY", "http://127.0.0.1:1")
+        .env_remove("NO_PROXY")
+        .env_remove("no_proxy")
         .output()
         .unwrap()
 }

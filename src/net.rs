@@ -6,6 +6,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 pub struct Http {
     client: Client,
+    loopback: Client,
     pub offline: bool,
 }
 pub struct Response {
@@ -14,14 +15,24 @@ pub struct Response {
 }
 impl Http {
     pub fn new(offline: bool) -> Result<Self> {
-        let client = Client::builder()
-            .timeout(Duration::from_secs(30))
-            .connect_timeout(Duration::from_secs(10))
-            .redirect(reqwest::redirect::Policy::none())
-            .user_agent(concat!("skill-bom/", env!("CARGO_PKG_VERSION")))
-            .build()
-            .map_err(|_| Error::new("NETWORK", "Cannot initialize TLS client", 2))?;
-        Ok(Self { client, offline })
+        let build = |no_proxy| {
+            let mut builder = Client::builder()
+                .timeout(Duration::from_secs(30))
+                .connect_timeout(Duration::from_secs(10))
+                .redirect(reqwest::redirect::Policy::none())
+                .user_agent(concat!("skill-bom/", env!("CARGO_PKG_VERSION")));
+            if no_proxy {
+                builder = builder.no_proxy();
+            }
+            builder
+                .build()
+                .map_err(|_| Error::new("NETWORK", "Cannot initialize TLS client", 2))
+        };
+        Ok(Self {
+            client: build(false)?,
+            loopback: build(true)?,
+            offline,
+        })
     }
     pub fn get(&self, url: &str, token: Option<&str>) -> Result<Response> {
         if self.offline {
@@ -46,13 +57,29 @@ impl Http {
                     2,
                 ));
             }
-            let mut request = self.client.get(current.clone());
+            let client = if matches!(
+                current.host_str(),
+                Some("127.0.0.1" | "localhost" | "[::1]" | "::1")
+            ) {
+                &self.loopback
+            } else {
+                &self.client
+            };
+            let mut request = client.get(current.clone());
             if current.origin() == original.origin()
                 && let Some(t) = token
             {
                 request = request.bearer_auth(t);
             }
-            let mut res = request.send().map_err(|_| Error::new("NETWORK","HTTP request failed or timed out",2).phase("download").hint("Check connectivity and retry; credentials are read from the configured environment variable."))?;
+            let mut res = match request.send() {
+                Ok(response) => response,
+                Err(error) if (error.is_connect() || error.is_timeout()) && retries < 2 => {
+                    retries += 1;
+                    std::thread::sleep(Duration::from_millis(100 * retries));
+                    continue;
+                }
+                Err(_) => return Err(Error::new("NETWORK","HTTP request failed or timed out",2).phase("download").hint("Check connectivity and retry; credentials are read from the configured environment variable.")),
+            };
             if res.status().is_redirection() {
                 redirects += 1;
                 if redirects > 5 {
