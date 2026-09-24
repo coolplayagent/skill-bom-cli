@@ -21,6 +21,13 @@ it does not predeclare passing results. Actual runs are recorded separately in
 | R12 | cli/quality: pinned official SPDX 2.3 Schema, relationship references, checksum scope and NOASSERTION |
 | R13 | quality: architecture DAG, I/O boundaries, authored file budget, docs/examples/Schemas, Cargo/Bazel toolchain alignment; independent CI gates |
 | R14 | quality: source Bazel target boundaries, book reachability and links, Skill/Cargo version agreement, deterministic archive contents; Bazel builds CLI and Skill package, release workflow checks each native binary |
+| R15 | agentcenter: explicit skillId/config, X-Auth-Token GET/POST, identity/business errors, latest SemVer selection, ZIP/content evidence, offline install, historical lock re-fetch and unavailable fresh historical request; Bazel adapter target and CLI lock/install/verify/BOM |
+
+The AgentCenter fixture is derived from Issue #2's reported contract. Internal
+RelayAgent source, a versioned API Schema and live service credentials were not
+available here; therefore only the local HTTP fixture is verified. The API's
+historical version binding remains unproven, so fresh historical resolution is
+rejected. Live smoke requires an authorized service and a disposable test Skill.
 
 Unit tests (`cargo test --locked --lib --bins --all-features`) and integration
 tests (`cargo test --locked --tests --all-features`) are separate entry points.

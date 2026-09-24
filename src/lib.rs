@@ -1,4 +1,6 @@
 #![forbid(unsafe_code)]
+#[path = "sources/agentcenter.rs"]
+pub mod agentcenter;
 pub mod application;
 #[path = "sources/archive.rs"]
 pub mod archive;

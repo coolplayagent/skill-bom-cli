@@ -14,4 +14,4 @@ skill-bom verify
 
 非本工具管理的目录不会被覆盖。本工具管理的 Skill 若被用户修改，也会阻止替换或删除；先审查本地修改，再决定如何处理。`list` 显示安装记录，`verify` 检测缺失、修改和与当前锁文件的差异。删除只作用于本环境以前管理、现在不再需要且未被修改的包。
 
-[上一篇：版本解析](02-resolution.md) · [下一篇：参考手册](../03-reference/README.md)
+[上一篇：版本解析](02-resolution.md) · [下一篇：AgentCenter](04-agentcenter.md)

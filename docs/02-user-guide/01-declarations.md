@@ -1,6 +1,6 @@
 # 声明来源与包元数据
 
-每个依赖都指定来源。ClawHub 需要注册表别名和 `@owner/slug`；Git 需要仓库地址，可带 Skill 子目录；HTTPS 归档需要稳定 URL、精确 SemVer 和完整 SHA-256。不要从搜索结果推断包身份。
+每个依赖都指定来源。ClawHub 需要注册表别名和 `@owner/slug`；[AgentCenter](04-agentcenter.md) 需要注册表别名、稳定 `skillId` 和 W3 令牌；Git 需要仓库地址，可带 Skill 子目录；HTTPS 归档需要稳定 URL、精确 SemVer 和完整 SHA-256。不要从搜索结果推断包身份。
 
 ```toml
 schema_version = 1
@@ -26,6 +26,6 @@ tag_pattern = "release-v{version}"
 
 旧 Skill 仍可安装。若确知其完整依赖，在根声明中用 `[[package_metadata]]` 精确匹配来源和版本，并设 `complete = true`。补充声明进入锁文件和 BOM；它不能覆盖上游已有的 `skill.toml`。示例见[设计规范](../../codespec/design/skill-bom-cli.md)。
 
-Registry 的 `token_env` 只指定环境变量名；凭据值不进入声明、锁或 BOM。Git SSH 使用本机 Git 凭据。归档必须使用 HTTPS（本机回环测试除外）。
+Registry 的 `token_env` 只指定环境变量名；凭据值不进入声明、锁或 BOM。ClawHub 使用 Bearer，AgentCenter 使用 `X-Auth-Token`。Git SSH 使用本机 Git 凭据。归档必须使用 HTTPS（本机回环测试除外）。
 
 [上一篇：使用指南目录](README.md) · [下一篇：版本解析](02-resolution.md)

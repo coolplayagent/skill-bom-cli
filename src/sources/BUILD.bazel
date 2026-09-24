@@ -9,6 +9,17 @@ filegroup(
 )
 
 rust_library(
+    name = "agentcenter",
+    crate_name = "skill_bom_source_agentcenter",
+    crate_root = "bazel_agentcenter.rs",
+    srcs = ["bazel_agentcenter.rs", "agentcenter.rs"],
+    edition = "2024",
+    deps = ["//:foundation"] + all_crate_deps(normal = True, package_name = ""),
+    proc_macro_deps = all_crate_deps(proc_macro = True, package_name = ""),
+    aliases = aliases(normal = True, proc_macro = True, package_name = ""),
+)
+
+rust_library(
     name = "archive",
     crate_name = "skill_bom_source_archive",
     crate_root = "bazel_archive.rs",
@@ -47,7 +58,7 @@ rust_library(
     crate_root = "bazel_lib.rs",
     srcs = ["bazel_lib.rs", "mod.rs"],
     edition = "2024",
-    deps = ["//:foundation", ":archive", ":git", ":clawhub"] + all_crate_deps(normal = True, package_name = ""),
+    deps = ["//:foundation", ":archive", ":git", ":clawhub", ":agentcenter"] + all_crate_deps(normal = True, package_name = ""),
     proc_macro_deps = all_crate_deps(proc_macro = True, package_name = ""),
     aliases = aliases(normal = True, proc_macro = True, package_name = ""),
 )

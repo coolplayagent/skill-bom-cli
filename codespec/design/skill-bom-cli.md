@@ -1,8 +1,11 @@
 # Skill BOM CLI design
 
-See [requirements R01–R14](../requirements/skill-bom-cli.md) and
+See [requirements R01–R15](../requirements/skill-bom-cli.md) and
 [test contract](../test/skill-bom-cli.md). Rust library modules are reusable;
 the binary installs interruption handling and delegates parsing/orchestration.
+
+The Issue #2 [AgentCenter Registry extension](agentcenter.md) adds R15 while
+preserving the existing source, store and installer boundaries.
 
 ## Declarations and identity
 
@@ -18,7 +21,8 @@ and cannot reserve the `.skill-bom` control namespace.
 
 An archive requires `version = "=1.0.0"`, SHA-256 and optional `subdir`. A Git
 dependency requires either a SemVer range (default tags `v{version}`) or `rev`.
-ClawHub requires `package = "@owner/slug"` and either version or tag. URLs reject
+ClawHub requires `package = "@owner/slug"` and either version or tag. AgentCenter
+requires a stable `skillId` in `package` and a SemVer version request. URLs reject
 credentials/query/fragment; use SSH credentials or registry token_env instead.
 Registry token values are never serialized. Public requests are anonymous.
 
@@ -147,8 +151,8 @@ path confinement, HTTP and subprocess APIs. The Rust quality test checks the
 module import graph, domain I/O prohibition and reserved boundary imports.
 
 Cargo composes these modules through `src/lib.rs`. Bazel compiles shared
-contracts/I/O boundaries in `//:foundation`, archive, Git and ClawHub adapters
-separately in `//src/sources:archive`, `:git` and `:clawhub`, their provider in `:sources`, then links
+contracts/I/O boundaries in `//:foundation`, archive, Git, ClawHub and AgentCenter adapters
+separately in `//src/sources:archive`, `:git`, `:clawhub` and `:agentcenter`, their provider in `:sources`, then links
 `//:skill_bom`. Bazel-only entry points re-export the same public module paths;
 the source files have one implementation. The narrow `srcs` sets preserve action
 cache hits for untouched adapters. `//:skill-package` packages a native CLI with

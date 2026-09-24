@@ -1,4 +1,5 @@
 //! Source adapters implement the resolver's I/O-free provider contract.
+pub use crate::agentcenter;
 pub use crate::archive;
 pub use crate::clawhub;
 use crate::domain::*;
@@ -44,7 +45,8 @@ impl<'a> Provider<'a> {
             Ok(path) => Ok(path),
             Err(e) if self.http.offline => Err(e),
             Err(_) => {
-                let restored = self.materialize(&p.source, &p.candidate, &p.acquisition, None)?;
+                let restored =
+                    self.materialize(&p.source, &p.candidate, &p.acquisition, Some(p))?;
                 if restored.tree_sha256 != p.tree_sha256
                     || !store::same_files(&restored.files, &p.files)
                     || restored.evidence.archive_sha256 != p.evidence.archive_sha256
@@ -88,6 +90,9 @@ impl SourceProvider for Provider<'_> {
             Source::Git { repository, .. } => git::candidates(repository, request)?,
             Source::Clawhub { .. } => {
                 clawhub::candidates(&self.http, self.manifest, source, request)?
+            }
+            Source::Agentcenter { .. } => {
+                agentcenter::candidates(&self.http, self.manifest, source, request)?
             }
         };
         if candidates.len() > MAX_CANDIDATES {
@@ -141,6 +146,14 @@ impl SourceProvider for Provider<'_> {
             Source::Clawhub { .. } => {
                 clawhub::fetch(&self.http, self.manifest, source, candidate, temp.path())?
             }
+            Source::Agentcenter { .. } => agentcenter::fetch(
+                &self.http,
+                self.manifest,
+                source,
+                candidate,
+                previous.and_then(|p| p.evidence.archive_sha256.as_deref()),
+                temp.path(),
+            )?,
         };
         let meta = metadata(self.manifest, source, &actual, &root, self.strict)?;
         let (hash, files) = self.store.publish(&root)?;

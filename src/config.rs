@@ -62,10 +62,27 @@ impl Manifest {
             return fail("CONFIG", "Invalid project name");
         }
         for (alias, r) in &self.registries {
-            if !safe_name(alias) || r.kind != "clawhub" {
-                return fail("REGISTRY", "Only named ClawHub registries are supported");
+            if !safe_name(alias) || !matches!(r.kind.as_str(), "clawhub" | "agentcenter") {
+                return fail(
+                    "REGISTRY",
+                    "Only named ClawHub or AgentCenter registries are supported",
+                );
             }
-            web_url(&r.url)?;
+            let registry_url = web_url(&r.url)?;
+            if r.kind == "agentcenter" && r.token_env.is_none() {
+                return fail(
+                    "REGISTRY",
+                    "AgentCenter requires token_env for X-Auth-Token",
+                );
+            }
+            if r.kind == "agentcenter"
+                && url::Url::parse(&registry_url).is_ok_and(|url| url.path() != "/")
+            {
+                return fail(
+                    "REGISTRY",
+                    "AgentCenter Registry URL must be an origin without a path",
+                );
+            }
             if let Some(s) = &r.token_env
                 && (s.is_empty() || !s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_'))
             {
@@ -172,7 +189,7 @@ impl Manifest {
             }
             return Ok(Source::Archive { url: web_url(u)? });
         }
-        if d.rev.is_some() || d.sha256.is_some() || d.subdir.is_some() || d.tag_pattern.is_some() {
+        if d.rev.is_some() || d.sha256.is_some() || d.tag_pattern.is_some() {
             return fail(
                 "SOURCE_COMBINATION",
                 "Registry accepts package and version or tag",
@@ -183,6 +200,22 @@ impl Manifest {
             .get(d.registry.as_deref().unwrap_or(""))
             .ok_or_else(|| Error::new("REGISTRY", "Registry alias must be defined at root", 2))?;
         let p = d.package.as_deref().unwrap_or("");
+        if r.kind == "agentcenter" {
+            if !safe_name(p) || d.tag.is_some() || d.version.is_none() {
+                return fail(
+                    "PACKAGE_ID",
+                    "AgentCenter requires a stable skillId and a SemVer version constraint",
+                );
+            }
+            return Ok(Source::Agentcenter {
+                registry: web_url(&r.url)?,
+                skill_id: p.to_string(),
+                subdir: d.subdir.clone().unwrap_or_default(),
+            });
+        }
+        if d.subdir.is_some() {
+            return fail("SOURCE_COMBINATION", "ClawHub does not accept subdir");
+        }
         let (owner, slug) = p
             .strip_prefix('@')
             .and_then(|s| s.split_once('/'))

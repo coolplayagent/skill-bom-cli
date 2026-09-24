@@ -185,6 +185,11 @@ pub enum Source {
         owner: String,
         slug: String,
     },
+    Agentcenter {
+        registry: String,
+        skill_id: String,
+        subdir: String,
+    },
 }
 impl Source {
     pub fn id(&self) -> String {
@@ -196,6 +201,13 @@ impl Source {
                 owner,
                 slug,
             } => format!("clawhub:{registry}/@{owner}/{slug}"),
+            Self::Agentcenter {
+                registry,
+                skill_id,
+                subdir,
+            } => {
+                format!("agentcenter:{registry}/skills/{skill_id}#{subdir}")
+            }
         }
     }
     pub fn location(&self) -> &str {
@@ -203,6 +215,7 @@ impl Source {
             Self::Git { repository, .. } => repository,
             Self::Archive { url } => url,
             Self::Clawhub { registry, .. } => registry,
+            Self::Agentcenter { registry, .. } => registry,
         }
     }
 }

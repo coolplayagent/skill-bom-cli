@@ -32,7 +32,7 @@ checks:
     timeout_seconds: 900
   - id: integration
     kind: command
-    argv: [cargo, test, --locked, --test, config, --test, resolver, --test, sources, --test, protocol, --test, transactions, --test, cli, --test, quality, --all-features]
+    argv: [cargo, test, --locked, --test, config, --test, resolver, --test, sources, --test, protocol, --test, agentcenter, --test, transactions, --test, cli, --test, quality, --all-features]
     depends_on: [check]
     timeout_seconds: 900
   - id: coverage

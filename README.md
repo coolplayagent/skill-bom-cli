@@ -43,12 +43,15 @@ uses standard OS configuration, data and cache directories, independently of
 project environments. Actual manifest, lock and target paths are printed to
 stderr. JSON command results go to stdout; errors/diagnostics go to stderr.
 
-ClawHub references must be owner qualified (`@owner/slug`). HTTPS archives need
+ClawHub references must be owner qualified (`@owner/slug`). AgentCenter uses an
+explicit stable skillId and a W3 `X-Auth-Token` from `token_env`; its reported
+detail API exposes only the latest SemVer candidate for a fresh lock. See the
+[AgentCenter chapter](docs/02-user-guide/04-agentcenter.md). HTTPS archives need
 an exact `=x.y.z` version and SHA-256. Git tags default to `v{version}`; a `rev`
 selector instead pins a full commit without inventing a semantic version.
 Credential-bearing URLs and URL query strings are rejected. SSH uses the
 conventional `git` user and existing Git credentials. A registry's `token_env`
-selects its Bearer token; the value is never serialized or sent across origins.
+selects its Bearer or AgentCenter token; the value is never serialized or sent across origins.
 Loopback HTTP is allowed for local tests; remote archives/registries require HTTPS.
 
 A Skill must contain exactly one of `SKILL.md`, `skill.md`, or `skills.md`.

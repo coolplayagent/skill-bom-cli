@@ -91,8 +91,22 @@ impl Server {
                         break;
                     }
                     bytes.extend_from_slice(&buffer[..n]);
-                    if bytes.windows(4).any(|b| b == b"\r\n\r\n") || bytes.len() > 16384 {
-                        break;
+                    if bytes.len() > 16384 {
+                        panic!("fixture request exceeds 16 KiB");
+                    }
+                    if let Some(end) = bytes.windows(4).position(|b| b == b"\r\n\r\n") {
+                        let headers = String::from_utf8_lossy(&bytes[..end]);
+                        let length = headers
+                            .lines()
+                            .find_map(|line| {
+                                line.to_ascii_lowercase()
+                                    .strip_prefix("content-length:")
+                                    .and_then(|value| value.trim().parse::<usize>().ok())
+                            })
+                            .unwrap_or(0);
+                        if bytes.len() >= end + 4 + length {
+                            break;
+                        }
                     }
                 }
                 let text = String::from_utf8_lossy(&bytes);

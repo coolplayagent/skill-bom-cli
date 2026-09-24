@@ -1,6 +1,6 @@
 //! Bounded synchronous HTTP. Redirect credentials never cross origins.
 use crate::domain::*;
-use reqwest::{blocking::Client, header};
+use reqwest::{Method, blocking::Client, header};
 use std::io::Read;
 use std::time::{Duration, Instant, SystemTime};
 
@@ -35,6 +35,22 @@ impl Http {
         })
     }
     pub fn get(&self, url: &str, token: Option<&str>) -> Result<Response> {
+        self.request(Method::GET, url, None, token, false)
+    }
+    pub fn get_x_auth(&self, url: &str, token: &str) -> Result<Response> {
+        self.request(Method::GET, url, None, Some(token), true)
+    }
+    pub fn post_json(&self, url: &str, body: &serde_json::Value, token: &str) -> Result<Response> {
+        self.request(Method::POST, url, Some(body), Some(token), true)
+    }
+    fn request(
+        &self,
+        method: Method,
+        url: &str,
+        body: Option<&serde_json::Value>,
+        token: Option<&str>,
+        x_auth: bool,
+    ) -> Result<Response> {
         if self.offline {
             return Err(Error::new(
                 "OFFLINE_MISS",
@@ -65,11 +81,18 @@ impl Http {
             } else {
                 &self.client
             };
-            let mut request = client.get(current.clone());
+            let mut request = client.request(method.clone(), current.clone());
             if current.origin() == original.origin()
                 && let Some(t) = token
             {
-                request = request.bearer_auth(t);
+                request = if x_auth {
+                    request.header("X-Auth-Token", t)
+                } else {
+                    request.bearer_auth(t)
+                };
+            }
+            if let Some(value) = body {
+                request = request.json(value);
             }
             let mut res = match request.send() {
                 Ok(response) => response,
@@ -81,6 +104,12 @@ impl Http {
                 Err(_) => return Err(Error::new("NETWORK","HTTP request failed or timed out",2).phase("download").hint("Check connectivity and retry; credentials are read from the configured environment variable.")),
             };
             if res.status().is_redirection() {
+                if x_auth {
+                    return fail(
+                        "PROTOCOL",
+                        "AgentCenter authenticated redirects are not accepted",
+                    );
+                }
                 redirects += 1;
                 if redirects > 5 {
                     return Err(Error::new("PROTOCOL", "Too many redirects", 2));
@@ -138,6 +167,9 @@ impl Http {
             }
             if !res.status().is_success() {
                 let status = res.status().as_u16();
+                if x_auth && matches!(status, 401 | 403) {
+                    return fail("AUTH_REQUIRED", "AgentCenter authentication was rejected");
+                }
                 // Error bodies can echo credentials; expose only bounded status/protocol data.
                 return Err(Error::new(if matches!(status,403|410|423) {"SOURCE_BLOCKED"} else if status==404 {"SOURCE_VERSION_UNAVAILABLE"} else {"HTTP_STATUS"},format!("HTTP {status} (server rejected request; JSON and text errors are supported)"),if status>=500 {2} else {1}).phase("download"));
             }
@@ -186,6 +218,20 @@ fn retry_after(s: &str) -> Option<Duration> {
 /// Injectable HTTP boundary used by source contract tests and embedding applications.
 pub trait Transport {
     fn get(&self, url: &str, token: Option<&str>) -> Result<Response>;
+    fn get_x_auth(&self, _url: &str, _token: &str) -> Result<Response> {
+        Err(Error::new(
+            "PROTOCOL",
+            "Transport has no X-Auth-Token GET support",
+            2,
+        ))
+    }
+    fn post_json(&self, _url: &str, _body: &serde_json::Value, _token: &str) -> Result<Response> {
+        Err(Error::new(
+            "PROTOCOL",
+            "Transport has no POST JSON support",
+            2,
+        ))
+    }
     fn json(&self, url: &str, token: Option<&str>) -> Result<serde_json::Value> {
         let response = self.get(url, token)?;
         serde_json::from_slice(&response.bytes)
@@ -195,6 +241,12 @@ pub trait Transport {
 impl Transport for Http {
     fn get(&self, url: &str, token: Option<&str>) -> Result<Response> {
         Http::get(self, url, token)
+    }
+    fn get_x_auth(&self, url: &str, token: &str) -> Result<Response> {
+        Http::get_x_auth(self, url, token)
+    }
+    fn post_json(&self, url: &str, body: &serde_json::Value, token: &str) -> Result<Response> {
+        Http::post_json(self, url, body, token)
     }
 }
 

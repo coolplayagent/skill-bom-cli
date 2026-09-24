@@ -193,7 +193,7 @@ fn docs_examples_and_build_contracts_agree() {
     let _: PackageManifest = toml::from_str(include_str!("../examples/skill.toml")).unwrap();
     let requirements = include_str!("../codespec/requirements/skill-bom-cli.md");
     let tests = include_str!("../codespec/test/skill-bom-cli.md");
-    for id in 1..=14 {
+    for id in 1..=15 {
         assert!(requirements.contains(&format!("R{id:02}")));
         assert!(tests.contains(&format!("R{id:02}")));
     }
@@ -205,7 +205,7 @@ fn docs_examples_and_build_contracts_agree() {
     assert_eq!(include_str!("../.bazelversion").trim(), "9.2.0");
     let build = include_str!("../BUILD.bazel");
     let sources_build = include_str!("../src/sources/BUILD.bazel");
-    for adapter in ["archive", "git", "clawhub", "sources"] {
+    for adapter in ["archive", "git", "clawhub", "agentcenter", "sources"] {
         assert!(sources_build.contains(&format!("name = \"{adapter}\"")));
     }
     assert!(!build.contains("src/**/*.rs"));
@@ -214,6 +214,7 @@ fn docs_examples_and_build_contracts_agree() {
         "resolver",
         "sources",
         "protocol",
+        "agentcenter",
         "transactions",
         "cli",
         "quality",

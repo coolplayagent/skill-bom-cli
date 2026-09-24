@@ -2,7 +2,7 @@
 name: skill-bom-cli
 description: Manage declared Skill dependencies with the skill-bom CLI. Use for skills.toml, skills.lock, project or global Skill installation, provenance, drift checks, and JSON or SPDX BOM export.
 metadata:
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Skill BOM CLI
@@ -15,8 +15,9 @@ Do not download or install a different executable without the user's request.
 
 Work in the user's selected project. Read its `skills.toml` and any existing
 `skills.lock` before changing dependencies. Source identity is explicit: use an
-owner-qualified ClawHub package, a Git repository and optional subdirectory, or
-an HTTPS archive with an exact version and SHA-256. Do not infer a source from
+owner-qualified ClawHub package, an AgentCenter Registry with an explicit
+skillId and token_env, a Git repository and optional subdirectory, or an HTTPS
+archive with an exact version and SHA-256. Do not infer a source from
 a search result or from natural language in `SKILL.md`.
 
 - Use `validate` to check declarations and `lock` to resolve the full graph.
