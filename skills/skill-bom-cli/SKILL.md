@@ -2,7 +2,7 @@
 name: skill-bom-cli
 description: Manage declared Skill dependencies with the skill-bom CLI. Use for skills.toml, skills.lock, project or global Skill installation, provenance, drift checks, and JSON or SPDX BOM export.
 metadata:
-  version: "0.1.0"
+  version: "0.0.1"
 ---
 
 # Skill BOM CLI

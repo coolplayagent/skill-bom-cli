@@ -12,7 +12,7 @@ pub fn no_symlink(path: &Path) -> Result<()> {
     for part in path.components() {
         current.push(part);
         match std::fs::symlink_metadata(&current) {
-            Ok(m) if m.file_type().is_symlink() => {
+            Ok(m) if m.file_type().is_symlink() && !trusted_macos_alias(&current) => {
                 return fail(
                     "UNSAFE_PATH",
                     format!("Symlink path: {}", current.display()),
@@ -24,6 +24,24 @@ pub fn no_symlink(path: &Path) -> Result<()> {
         }
     }
     Ok(())
+}
+fn trusted_macos_alias(path: &Path) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        let expected = if path == Path::new("/var") {
+            Some(Path::new("/private/var"))
+        } else if path == Path::new("/tmp") {
+            Some(Path::new("/private/tmp"))
+        } else {
+            None
+        };
+        expected.is_some_and(|target| std::fs::canonicalize(path).is_ok_and(|p| p == target))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = path;
+        false
+    }
 }
 pub fn read(path: &Path, limit: u64) -> Result<Vec<u8>> {
     no_symlink(path)?;

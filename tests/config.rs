@@ -195,8 +195,22 @@ fn metadata_unknown_supplements_and_version_checks() {
         std::fs::write(root.join("skill.toml"), bad).unwrap();
         assert!(sources::metadata(&m, &source, &candidate, root, false).is_err());
     }
+    assert_eq!(
+        store::entrypoint(root).unwrap().file_name().unwrap(),
+        "SKILL.md"
+    );
     std::fs::write(root.join("skill.md"), "extra").unwrap();
-    assert!(store::entrypoint(root).is_err());
+    let entry_names: Vec<_> = std::fs::read_dir(root)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    if entry_names.iter().any(|name| name == "SKILL.md")
+        && entry_names.iter().any(|name| name == "skill.md")
+    {
+        assert!(store::entrypoint(root).is_err());
+    } else {
+        assert!(store::entrypoint(root).is_ok());
+    }
 }
 #[test]
 fn portable_paths_and_atomic_writes() {

@@ -120,14 +120,23 @@ fn register_path(names: &mut BTreeMap<String, String>, path: &str) -> Result<()>
 }
 pub fn entrypoint(root: &Path) -> Result<PathBuf> {
     let names = ["SKILL.md", "skill.md", "skills.md"];
-    let found: Vec<_> = names.iter().filter(|n| root.join(n).is_file()).collect();
+    let entries = std::fs::read_dir(root)?.collect::<std::io::Result<Vec<_>>>()?;
+    let found: Vec<_> = entries
+        .into_iter()
+        .filter(|entry| names.iter().any(|name| entry.file_name() == *name))
+        .collect();
     if found.len() != 1 {
         return fail(
             "SKILL_ENTRYPOINT",
             "Expected exactly one of SKILL.md, skill.md, skills.md",
         );
     }
-    Ok(root.join(found[0]))
+    let path = found[0].path();
+    paths::no_symlink(&path)?;
+    if !found[0].file_type()?.is_file() {
+        return fail("SKILL_ENTRYPOINT", "Skill entrypoint is not a regular file");
+    }
+    Ok(path)
 }
 #[derive(Clone)]
 pub struct Store {
