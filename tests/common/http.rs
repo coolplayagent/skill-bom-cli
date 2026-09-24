@@ -53,15 +53,40 @@ impl Server {
                         std::thread::sleep(Duration::from_millis(2));
                         continue;
                     }
-                    Err(_) => break,
+                    Err(e)
+                        if matches!(
+                            e.kind(),
+                            std::io::ErrorKind::Interrupted
+                                | std::io::ErrorKind::ConnectionAborted
+                                | std::io::ErrorKind::ConnectionReset
+                        ) =>
+                    {
+                        continue;
+                    }
+                    Err(e) => panic!("fixture accept failed: {e}"),
                 };
+                // Accepted sockets can inherit the listener's nonblocking mode on Windows.
+                socket.set_nonblocking(false).unwrap();
                 socket
                     .set_read_timeout(Some(Duration::from_secs(5)))
                     .unwrap();
                 let mut bytes = vec![];
                 let mut buffer = [0; 1024];
                 loop {
-                    let n = socket.read(&mut buffer).unwrap_or(0);
+                    let n = match socket.read(&mut buffer) {
+                        Ok(n) => n,
+                        Err(e)
+                            if matches!(
+                                e.kind(),
+                                std::io::ErrorKind::ConnectionAborted
+                                    | std::io::ErrorKind::ConnectionReset
+                            ) =>
+                        {
+                            break;
+                        }
+                        Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                        Err(e) => panic!("fixture request read failed: {e}"),
+                    };
                     if n == 0 {
                         break;
                     }
