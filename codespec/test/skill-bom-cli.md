@@ -22,6 +22,7 @@ it does not predeclare passing results. Actual runs are recorded separately in
 | R13 | quality: architecture DAG, I/O boundaries, authored file budget, docs/examples/Schemas, Cargo/Bazel toolchain alignment; independent CI gates |
 | R14 | quality: source Bazel target boundaries, book reachability and links, Skill/Cargo version agreement, deterministic archive contents; Bazel builds CLI and Skill package, release workflow checks each native binary |
 | R15 | agentcenter: explicit skillId/config, X-Auth-Token GET/POST, identity/business errors, latest SemVer selection, ZIP/content evidence, offline install, historical lock re-fetch and unavailable fresh historical request; Bazel adapter target and CLI lock/install/verify/BOM |
+| R16 | cli: sync first install, repeat, preview, offline and unknown alias, upgrade, verified deployment and lock/installation agreement, source failure, content mismatch and installation conflict/local modification preservation |
 
 The AgentCenter fixture is derived from Issue #2's reported contract. Internal
 RelayAgent source, a versioned API Schema and live service credentials were not

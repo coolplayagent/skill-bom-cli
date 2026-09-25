@@ -25,8 +25,9 @@ and [test evidence](../test/skill-bom-cli.md).
 | R13 | Pinned Cargo/Bazel graph and toolchains; independent unit/integration gates, >=90% Rust line coverage, Miri/ASan, architecture and file budgets, Linux/macOS/Windows CI and truthful final Qualitygate evidence. |
 | R14 | Archive, Git and ClawHub source adapters and source orchestration are separate Bazel `rust_library` compilation units with Cargo API parity; a version-matched CLI Skill plus platform binaries forms one verified release archive, and a navigable book documents use, formats, architecture and verification. |
 | R15 | An explicit AgentCenter Registry uses stable skillId identity, origin-bound X-Auth-Token, direct detail and versioned ZIP download, validated response and archive bytes, independent archive/tree hashes, existing cache and install transactions, and a separate Bazel library. Fresh resolution offers only the reported latest SemVer; unavailable historical versions fail closed. |
+| R16 | `sync [alias]` upgrades using update's root selection, verifies all resolved content before deployment, and writes the lock only after successful installation. Preview reports changes and conflicts without changing lock or target; offline sync fails explicitly. A post-deployment lock-write failure reports the reconciliation command. |
 
-Required CLI commands are init, validate, lock, update [alias], install, tree,
+Required CLI commands are init, validate, lock, update [alias], sync [alias], install, tree,
 why, list, verify and bom. Install supports locked/frozen/dry-run; common options
 select manifest, global scope, target, offline access, JSON output and strict
 metadata. `schema` additionally exports implementation-generated JSON Schemas.

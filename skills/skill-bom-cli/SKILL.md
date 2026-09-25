@@ -24,6 +24,8 @@ a search result or from natural language in `SKILL.md`.
 - Use `update [alias]` only when upgrades are requested; ordinary `install`
   retains locked versions. Use `install --locked` for a checked-in lock and
   `install --frozen` when network access is prohibited.
+- Use `sync [alias]` to upgrade and install in one operation. Use `sync --dry-run`
+  to inspect the deployment plan first; sync requires online candidate queries.
 - Use `install --dry-run` to review additions, replacements, removals and
   conflicts before a requested deployment.
 - Use `tree` and `why <package>` to explain why a Skill is present. Use

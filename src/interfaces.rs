@@ -41,6 +41,12 @@ pub enum Command {
     Lock,
     /// Update all packages or one root alias, retaining other versions when possible.
     Update { alias: Option<String> },
+    /// Update allowed versions and deploy the resolved graph in one operation.
+    Sync {
+        alias: Option<String>,
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Verify and deploy locked content using a recoverable transaction.
     Install {
         #[arg(long)]

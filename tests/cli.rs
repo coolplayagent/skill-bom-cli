@@ -6,6 +6,10 @@ use common::{
 use skill_bom::domain::digest;
 use std::path::Path;
 use std::process::{Command, Output};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 fn run(root: &Path, args: &[&str]) -> Output {
     let binary = Path::new(env!("CARGO_BIN_EXE_skill-bom"));
     let binary = if binary.is_absolute() {
@@ -284,4 +288,149 @@ fn json_input_errors_and_invalid_generation_time_are_structured() {
         .unwrap();
     let value = json(output, 0);
     assert!(value["generated_at"].as_str().unwrap().ends_with('Z'));
+}
+
+#[test]
+fn sync_resolves_previews_upgrades_and_preserves_lock_on_conflict() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    let newer = Arc::new(AtomicBool::new(false));
+    let failing = Arc::new(AtomicBool::new(false));
+    let changed_content = Arc::new(AtomicBool::new(false));
+    let newer_server = newer.clone();
+    let failing_server = failing.clone();
+    let changed_server = changed_content.clone();
+    let server = Server::new(move |path, request| {
+        if failing_server.load(Ordering::SeqCst) {
+            return Reply::status(503, "unavailable");
+        }
+        let id = if path.contains("skillId=review") || request.contains("\"skillId\":\"review\"") {
+            "review"
+        } else if path.contains("skillId=child") || request.contains("\"skillId\":\"child\"") {
+            "child"
+        } else {
+            "other"
+        };
+        let version = if newer_server.load(Ordering::SeqCst) {
+            "1.1.0"
+        } else {
+            "1.0.0"
+        };
+        if path.contains("/get?") {
+            return Reply::json(
+                serde_json::json!({"code":20000,"data":{"skillId":id,"latestVersion":version}}),
+            );
+        }
+        let selected = if request.contains("\"version\":\"1.0.0\"") {
+            "1.0.0"
+        } else {
+            "1.1.0"
+        };
+        let deps = if id == "review" {
+            "[dependencies.child]\nregistry='market'\npackage='child'\nversion='^1'\n"
+        } else {
+            ""
+        };
+        let body = if changed_server.load(Ordering::SeqCst) {
+            "unexpected bytes"
+        } else {
+            selected
+        };
+        Reply::bytes(
+            "application/zip",
+            zip(&[
+                (
+                    "SKILL.md",
+                    format!("---\nname: {id}\n---\n{body}\n").as_bytes(),
+                ),
+                ("skill.toml", metadata(id, selected, deps).as_bytes()),
+            ]),
+        )
+    });
+    std::fs::write(root.join("skills.toml"), format!(
+        "schema_version=1\n[project]\nname='test'\n[registries.market]\nkind='agentcenter'\nurl={:?}\ntoken_env='PATH'\n[dependencies.review]\nregistry='market'\npackage='review'\nversion='^1'\n[dependencies.other]\nregistry='market'\npackage='other'\nversion='^1'\n", server.url
+    )).unwrap();
+    let preview = json(run(root, &["sync", "--dry-run", "--format", "json"]), 0);
+    assert_eq!(preview["packages"], 3);
+    assert!(!root.join("skills.lock").exists());
+    assert!(!root.join("skills").exists());
+    let first = json(run(root, &["sync", "--format", "json"]), 0);
+    assert_eq!(first["changes"].as_array().unwrap().len(), 3);
+    assert_eq!(
+        json(run(root, &["verify", "--format", "json"]), 0)["lock_differs"],
+        false
+    );
+    assert!(root.join("skills/child/SKILL.md").exists());
+    let first_lock = std::fs::read(root.join("skills.lock")).unwrap();
+    assert!(
+        json(run(root, &["sync", "--format", "json"]), 0)["changes"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    newer.store(true, Ordering::SeqCst);
+    let targeted = json(
+        run(root, &["sync", "review", "--dry-run", "--format", "json"]),
+        0,
+    );
+    assert_eq!(targeted["changes"].as_array().unwrap().len(), 1);
+    assert_eq!(std::fs::read(root.join("skills.lock")).unwrap(), first_lock);
+    json(run(root, &["sync", "review", "--format", "json"]), 0);
+    assert!(
+        std::fs::read_to_string(root.join("skills/review/SKILL.md"))
+            .unwrap()
+            .contains("1.1.0")
+    );
+    assert!(
+        std::fs::read_to_string(root.join("skills/child/SKILL.md"))
+            .unwrap()
+            .contains("1.0.0")
+    );
+    let before_full = std::fs::read(root.join("skills.lock")).unwrap();
+    failing.store(true, Ordering::SeqCst);
+    assert_eq!(
+        run(root, &["sync", "--format", "json"]).status.code(),
+        Some(2)
+    );
+    assert_eq!(
+        std::fs::read(root.join("skills.lock")).unwrap(),
+        before_full
+    );
+    failing.store(false, Ordering::SeqCst);
+    let full = json(run(root, &["sync", "--format", "json"]), 0);
+    assert_eq!(full["changes"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        json(run(root, &["verify", "--format", "json"]), 0)["lock_differs"],
+        false
+    );
+    let offline = run(root, &["sync", "--offline", "--format", "json"]);
+    assert_eq!(offline.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&offline.stderr).contains("SYNC_OFFLINE"));
+    let unknown = run(root, &["sync", "missing", "--format", "json"]);
+    assert_eq!(unknown.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&unknown.stderr).contains("ALIAS"));
+    let before_mismatch = std::fs::read(root.join("skills.lock")).unwrap();
+    std::fs::remove_dir_all(root.join("test-home/cache")).unwrap();
+    changed_content.store(true, Ordering::SeqCst);
+    let mismatch = run(root, &["sync", "--format", "json"]);
+    assert_eq!(mismatch.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&mismatch.stderr).contains("CONTENT_CHANGED"));
+    assert_eq!(
+        std::fs::read(root.join("skills.lock")).unwrap(),
+        before_mismatch
+    );
+    changed_content.store(false, Ordering::SeqCst);
+    std::fs::write(root.join("skills/review/SKILL.md"), "local modification").unwrap();
+    let before_conflict = std::fs::read(root.join("skills.lock")).unwrap();
+    let conflict = json(run(root, &["sync", "--dry-run", "--format", "json"]), 1);
+    assert!(!conflict["conflicts"].as_array().unwrap().is_empty());
+    assert_eq!(run(root, &["sync"]).status.code(), Some(1));
+    assert_eq!(
+        std::fs::read(root.join("skills.lock")).unwrap(),
+        before_conflict
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join("skills/review/SKILL.md")).unwrap(),
+        "local modification"
+    );
 }

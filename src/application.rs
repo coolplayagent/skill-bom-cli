@@ -52,10 +52,17 @@ pub fn run(cli: &Cli) -> Result<Output> {
         Command::Validate => {
             Output::json(serde_json::json!({"valid":true,"manifest_digest":manifest.digest()?}))
         }
-        Command::Lock | Command::Update { .. } => {
+        Command::Lock | Command::Update { .. } | Command::Sync { .. } => {
+            if matches!(cli.command, Command::Sync { .. }) && cli.offline {
+                return Err(Error::new(
+                    "SYNC_OFFLINE",
+                    "sync requires online version candidate queries",
+                    2,
+                ));
+            }
             let old = optional_lock(&scope)?;
             let mut update = BTreeSet::new();
-            if let Command::Update { alias } = &cli.command {
+            if let Command::Update { alias } | Command::Sync { alias, .. } = &cli.command {
                 if let Some(alias) = alias {
                     let d = manifest
                         .dependencies
@@ -79,11 +86,39 @@ pub fn run(cli: &Cli) -> Result<Output> {
             )?;
             let lock = resolver::Resolver::new(&manifest, &mut provider, old.as_ref(), update)
                 .resolve()?;
-            config::write_lock(&scope.lock, &lock)?;
-            report_warnings(&lock, cli.offline);
-            Output::json(
-                serde_json::json!({"lock":scope.lock,"packages":lock.packages.len(),"digest":json_digest(&lock)?}),
-            )
+            if let Command::Sync { dry_run, .. } = &cli.command {
+                if cli.strict_metadata {
+                    strict(&lock)?;
+                }
+                for p in lock.packages.values() {
+                    provider.ensure(p)?;
+                }
+                report_warnings(&lock, false);
+                let plan = if *dry_run {
+                    installer::plan(&scope.target, &scope.owner, &lock)?
+                } else {
+                    let guard = installer::acquire(&scope.target, &scope.owner)?;
+                    installer::deploy(&scope.target, &scope.owner, &lock, &provider.store, &guard)?
+                };
+                if !*dry_run {
+                    config::write_lock(&scope.lock, &lock).map_err(|e| {
+                        e.hint("Deployment succeeded but writing skills.lock failed. Run skill-bom sync again to reconcile the lock and installation record.")
+                    })?;
+                }
+                let failed = !plan.conflicts.is_empty();
+                let mut out = Output::json(serde_json::json!({
+                    "lock":scope.lock,"packages":lock.packages.len(),"digest":json_digest(&lock)?,
+                    "changes":plan.changes,"conflicts":plan.conflicts
+                }))?;
+                out.exit_code = u8::from(failed);
+                Ok(out)
+            } else {
+                config::write_lock(&scope.lock, &lock)?;
+                report_warnings(&lock, cli.offline);
+                Output::json(
+                    serde_json::json!({"lock":scope.lock,"packages":lock.packages.len(),"digest":json_digest(&lock)?}),
+                )
+            }
         }
         Command::Install {
             locked,

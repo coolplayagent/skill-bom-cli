@@ -7,10 +7,15 @@ skill-bom install --locked
 skill-bom --offline install --locked
 skill-bom install --frozen
 skill-bom install --dry-run
+skill-bom sync --dry-run
+skill-bom sync
+skill-bom sync my-alias
 skill-bom verify
 ```
 
 `--frozen` 等同于锁定且离线。离线只使用已经验证的缓存；缺失或损坏会失败，不访问网络。在线缓存损坏会重新获取并按锁摘要验证。安装先取得和验证全部内容，再在目标文件系统暂存；独占锁、备份和事务日志支持失败回滚与下次写操作恢复。
+
+`sync` 一次完成升级和安装，只有部署成功才更新锁。预览允许下载到缓存，但不改变目标和锁；预览中的冲突使命令返回失败。同步不能与 `--offline` 合用。若部署成功而写锁失败，安装记录可能暂时领先于旧锁；重新运行 `sync` 可修复。
 
 非本工具管理的目录不会被覆盖。本工具管理的 Skill 若被用户修改，也会阻止替换或删除；先审查本地修改，再决定如何处理。`list` 显示安装记录，`verify` 检测缺失、修改和与当前锁文件的差异。删除只作用于本环境以前管理、现在不再需要且未被修改的包。
 

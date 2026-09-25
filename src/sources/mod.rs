@@ -151,7 +151,9 @@ impl SourceProvider for Provider<'_> {
                 self.manifest,
                 source,
                 candidate,
-                previous.and_then(|p| p.evidence.archive_sha256.as_deref()),
+                previous
+                    .filter(|p| p.candidate == *candidate)
+                    .and_then(|p| p.evidence.archive_sha256.as_deref()),
                 temp.path(),
             )?,
         };
