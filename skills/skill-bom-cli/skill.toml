@@ -2,6 +2,6 @@ schema_version = 1
 
 [package]
 name = "skill-bom-cli"
-version = "0.0.2"
+version = "0.0.3"
 description = "Operate the skill-bom CLI for declared Skill dependencies and BOMs"
 license = "MIT"
