@@ -1,5 +1,5 @@
 //! Bazel composition crate preserving the Cargo library's public module paths.
-pub use skill_bom_foundation::{config, domain, env, net, paths, process, store};
+pub use skill_bom_foundation::{auth, config, domain, env, net, paths, process, store};
 pub use skill_bom_sources::{agentcenter, archive, clawhub, git, sources};
 
 #[path = "application.rs"]

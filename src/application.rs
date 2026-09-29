@@ -1,7 +1,7 @@
 //! Command orchestration. Core/source/store contracts remain independent of CLI rendering.
 use crate::domain::*;
-use crate::interfaces::{BomFrom, Cli, Command, Format, Output, SchemaKind};
-use crate::{bom, config, env, installer, paths, resolver, sources, store};
+use crate::interfaces::{AuthCommand, BomFrom, Cli, Command, Format, Output, SchemaKind};
+use crate::{auth, bom, config, env, installer, interfaces, paths, resolver, sources, store};
 use std::collections::BTreeSet;
 use std::io::Write;
 
@@ -15,6 +15,9 @@ pub fn run(cli: &Cli) -> Result<Output> {
             "spdx-json is only available for bom",
             2,
         ));
+    }
+    if let Command::Auth { command } = &cli.command {
+        return authenticate(command, cli.offline);
     }
     let mut scope = config::Scope::new(cli.manifest.as_deref(), cli.global, cli.target.as_deref())?;
     if matches!(cli.command, Command::Init) {
@@ -256,7 +259,41 @@ pub fn run(cli: &Cli) -> Result<Output> {
             out.exit_code = code;
             Ok(out)
         }
-        Command::Init | Command::Schema { .. } => unreachable!("handled before manifest loading"),
+        Command::Init | Command::Schema { .. } | Command::Auth { .. } => {
+            unreachable!("handled before manifest loading")
+        }
+    }
+}
+fn authenticate(command: &AuthCommand, offline: bool) -> Result<Output> {
+    let sessions = auth::Sessions::new(env::directories()?.config_dir())?;
+    match command {
+        AuthCommand::Status => interfaces::render_status(sessions.status(&env::SystemClock)?),
+        AuthCommand::Logout => {
+            sessions.logout(&auth::SystemSecrets)?;
+            let mut output = Output::json(serde_json::json!({"logged_out":true}))?;
+            output.text = Some("Local W3 credentials cleared.".into());
+            Ok(output)
+        }
+        AuthCommand::Login {
+            username,
+            password_stdin,
+        } => {
+            if offline {
+                return Err(Error::new(
+                    "OFFLINE_MISS",
+                    "W3 login requires network access",
+                    2,
+                ));
+            }
+            let (username, password) =
+                interfaces::login_input(username.as_deref(), *password_stdin)?;
+            let http = crate::net::Http::new(false)?;
+            let gateway = auth::W3Gateway(&http);
+            let status = sessions
+                .service(&auth::SystemSecrets, &gateway, &env::SystemClock)
+                .login(&username, &password)?;
+            interfaces::render_status(status)
+        }
     }
 }
 fn optional_lock(scope: &config::Scope) -> Result<Option<Lock>> {

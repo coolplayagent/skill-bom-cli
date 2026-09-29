@@ -89,7 +89,7 @@ fn locks_installs_offline_and_recovers_historical_archive() {
 #[test]
 fn config_identity_and_protocol_errors_fail_closed() {
     let base = "http://127.0.0.1:9999";
-    assert!(Manifest::parse(&format!("schema_version=1\n[project]\nname='test'\n[registries.a]\nkind='agentcenter'\nurl='{base}'\n")).is_err());
+    assert!(Manifest::parse(&format!("schema_version=1\n[project]\nname='test'\n[registries.a]\nkind='agentcenter'\nurl='{base}'\n")).is_ok());
     assert!(Manifest::parse(&format!("schema_version=1\n[project]\nname='test'\n[registries.a]\nkind='agentcenter'\nurl='{base}/path'\ntoken_env='PATH'\n")).is_err());
     for package in ["@owner/review", "../review", ""] {
         let text = format!(

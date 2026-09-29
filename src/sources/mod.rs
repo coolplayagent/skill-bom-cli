@@ -4,7 +4,7 @@ pub use crate::archive;
 pub use crate::clawhub;
 use crate::domain::*;
 pub use crate::git;
-use crate::{config::Manifest, net::Http, paths, store};
+use crate::{auth, config::Manifest, net::Http, paths, store};
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -23,6 +23,7 @@ pub struct Provider<'a> {
     pub store: store::Store,
     pub http: Http,
     pub strict: bool,
+    pub credentials: Box<dyn auth::CredentialProvider + 'a>,
     catalogs: BTreeMap<String, Vec<Candidate>>,
 }
 impl<'a> Provider<'a> {
@@ -37,6 +38,7 @@ impl<'a> Provider<'a> {
             store: store::Store::new(cache),
             http: Http::new(offline)?,
             strict,
+            credentials: Box::new(auth::SystemProvider),
             catalogs: BTreeMap::new(),
         })
     }
@@ -91,9 +93,13 @@ impl SourceProvider for Provider<'_> {
             Source::Clawhub { .. } => {
                 clawhub::candidates(&self.http, self.manifest, source, request)?
             }
-            Source::Agentcenter { .. } => {
-                agentcenter::candidates(&self.http, self.manifest, source, request)?
-            }
+            Source::Agentcenter { .. } => agentcenter::candidates_with_auth(
+                &self.http,
+                self.credentials.as_ref(),
+                self.manifest,
+                source,
+                request,
+            )?,
         };
         if candidates.len() > MAX_CANDIDATES {
             return Err(Error::new(
@@ -146,8 +152,9 @@ impl SourceProvider for Provider<'_> {
             Source::Clawhub { .. } => {
                 clawhub::fetch(&self.http, self.manifest, source, candidate, temp.path())?
             }
-            Source::Agentcenter { .. } => agentcenter::fetch(
+            Source::Agentcenter { .. } => agentcenter::fetch_with_auth(
                 &self.http,
+                self.credentials.as_ref(),
                 self.manifest,
                 source,
                 candidate,

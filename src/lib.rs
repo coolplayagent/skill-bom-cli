@@ -4,6 +4,7 @@ pub mod agentcenter;
 pub mod application;
 #[path = "sources/archive.rs"]
 pub mod archive;
+pub mod auth;
 pub mod bom;
 #[path = "sources/clawhub.rs"]
 pub mod clawhub;

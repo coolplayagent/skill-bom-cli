@@ -12,6 +12,11 @@ skills.toml → config → resolver ⇄ sources → store
 
 依赖身份来自来源位置与包定位，不来自本地别名。来源适配器只负责候选、不可变来源和内容；它们不能解释 Agent 的查找优先级，也不能执行 Skill 正文。网络、Git 子进程、路径和环境变量有集中的边界。
 
+`auth` 提供可注入的凭据提供方、凭据存储和登录网关；`env::Clock` 提供时钟。
+`domain::auth` 拥有无 I/O 的会话合同和有效期策略；`net` 独占 secureLogin HTTP。
+来源适配器在实际网络读取处取得凭据，缓存和离线分支不触碰认证；解析器不依赖
+认证模块。登录、刷新、退出共享有界进程锁，元数据日志记录未完成的凭据清理。
+
 Bazel 把共享基础模块、归档适配器、Git 适配器、ClawHub 适配器、AgentCenter 适配器、来源编排分别编译为 `rust_library`。Cargo 仍从 `src/lib.rs` 组合相同源码；Bazel 入口文件只重导出模块。修改 Git 适配器时，其他适配器与基础模块的编译动作仍可命中缓存。
 
 [上一篇：贡献者目录](README.md) · [下一篇：构建与发布](02-build-and-release.md)

@@ -1,0 +1,24 @@
+[book]
+title = "Skill BOM CLI：使用与实现"
+description = "可复现的 Skill 依赖安装、凭据管理与物料清单"
+language = "zh-CN"
+src = "docs"
+
+[build]
+build-dir = "target/book"
+create-missing = false
+
+[output.html]
+site-url = "/skill-bom-cli/"
+git-repository-url = "https://github.com/coolplayagent/skill-bom-cli"
+edit-url-template = "https://github.com/coolplayagent/skill-bom-cli/edit/main/docs/{path}"
+
+[output.html.search]
+enable = false
+
+[output.html.redirect]
+"README.html" = "index.html"
+"01-getting-started/README.html" = "index.html"
+"02-user-guide/README.html" = "index.html"
+"03-reference/README.html" = "index.html"
+"04-contributor-guide/README.html" = "index.html"

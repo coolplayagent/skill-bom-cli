@@ -193,7 +193,7 @@ fn docs_examples_and_build_contracts_agree() {
     let _: PackageManifest = toml::from_str(include_str!("../examples/skill.toml")).unwrap();
     let requirements = include_str!("../codespec/requirements/skill-bom-cli.md");
     let tests = include_str!("../codespec/test/skill-bom-cli.md");
-    for id in 1..=15 {
+    for id in 1..=17 {
         assert!(requirements.contains(&format!("R{id:02}")));
         assert!(tests.contains(&format!("R{id:02}")));
     }
@@ -215,11 +215,19 @@ fn docs_examples_and_build_contracts_agree() {
         "sources",
         "protocol",
         "agentcenter",
+        "auth",
+        "auth_protocol",
+        "auth_process",
+        "auth_cli",
         "transactions",
         "cli",
         "quality",
     ] {
         assert!(build.contains(&format!("\"{test}\"")));
+        let ci = include_str!("../.github/workflows/ci.yml");
+        let policy = include_str!("../qualitygate.yaml");
+        assert!(ci.contains(&format!("--test {test} ")));
+        assert!(policy.contains(&format!("--test, {test},")));
     }
     assert!(
         root().join("MODULE.bazel.lock").is_file(),
@@ -248,8 +256,30 @@ fn book_is_navigable_and_skill_matches_release() {
         .filter(|p| p.extension().is_some_and(|e| e == "md"))
         .collect();
     assert!(chapters.len() >= 12, "expected a multi-chapter book");
+    let book: toml::Value =
+        toml::from_str(&std::fs::read_to_string(root.join("book.toml")).unwrap()).unwrap();
+    assert_eq!(book["book"]["src"].as_str(), Some("docs"));
+    assert_eq!(
+        book["output"]["html"]["site-url"].as_str(),
+        Some("/skill-bom-cli/")
+    );
+    let summary = std::fs::read_to_string(docs.join("SUMMARY.md")).unwrap();
+    let mut listed = BTreeSet::new();
+    for tail in summary.split("](").skip(1) {
+        let target = tail.split_once(')').unwrap().0;
+        assert!(
+            listed.insert(lexical(&docs.join(target))),
+            "duplicate chapter"
+        );
+    }
+    let expected: BTreeSet<_> = chapters
+        .iter()
+        .filter(|path| path.file_name().unwrap() != "SUMMARY.md")
+        .map(|path| lexical(path))
+        .collect();
+    assert_eq!(listed, expected, "mdBook must publish every chapter");
     let mut reachable = BTreeSet::new();
-    let mut pending = vec![docs.join("README.md")];
+    let mut pending = vec![docs.join("README.md"), docs.join("SUMMARY.md")];
     while let Some(path) = pending.pop() {
         let path = lexical(&path);
         if !reachable.insert(path.clone()) {
@@ -267,6 +297,15 @@ fn book_is_navigable_and_skill_matches_release() {
         );
         for tail in text.split("](").skip(1) {
             let target = tail.split_once(')').unwrap().0.split('#').next().unwrap();
+            if let Some(repo_path) =
+                target.strip_prefix("https://github.com/coolplayagent/skill-bom-cli/blob/main/")
+            {
+                assert!(
+                    root.join(repo_path).is_file(),
+                    "broken source link {target}"
+                );
+                continue;
+            }
             if target.is_empty() || target.contains("://") || target.starts_with("mailto:") {
                 continue;
             }
@@ -278,6 +317,10 @@ fn book_is_navigable_and_skill_matches_release() {
                 path.display()
             );
             let resolved = lexical(&dest);
+            assert!(
+                resolved.starts_with(&docs),
+                "book links outside docs must use a repository URL: {target}"
+            );
             if resolved.starts_with(&docs) && resolved.extension().is_some_and(|e| e == "md") {
                 pending.push(resolved);
             }

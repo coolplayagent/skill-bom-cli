@@ -51,6 +51,17 @@ pub fn directories() -> Result<UserDirs> {
 pub fn now() -> String {
     chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
 }
+
+pub trait Clock {
+    fn now(&self) -> chrono::DateTime<chrono::Utc>;
+}
+
+pub struct SystemClock;
+impl Clock for SystemClock {
+    fn now(&self) -> chrono::DateTime<chrono::Utc> {
+        chrono::Utc::now()
+    }
+}
 pub fn timestamp(explicit: Option<&str>) -> Result<String> {
     if let Some(s) = explicit {
         return chrono::DateTime::parse_from_rfc3339(s)

@@ -33,6 +33,11 @@ pub enum Format {
 }
 #[derive(Debug, Subcommand)]
 pub enum Command {
+    /// Manage skill-bom's own local W3 login.
+    Auth {
+        #[command(subcommand)]
+        command: AuthCommand,
+    },
     /// Create a minimal skills.toml without overwriting an existing file.
     Init,
     /// Validate TOML, source combinations and root registry references.
@@ -77,6 +82,24 @@ pub enum Command {
         kind: SchemaKind,
     },
 }
+#[derive(Debug, Subcommand)]
+pub enum AuthCommand {
+    /// Authenticate with a W3 password and save credentials in the system keyring.
+    Login {
+        #[arg(long)]
+        username: Option<String>,
+        #[arg(long)]
+        password_stdin: bool,
+    },
+    /// Show local session metadata without validating or refreshing the token.
+    Status,
+    /// Remove skill-bom's own saved password and token.
+    Logout,
+}
+
+#[path = "interfaces/auth_input.rs"]
+mod auth_input;
+pub use auth_input::{login_input, render_status};
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum BomFrom {
     Lock,

@@ -2,7 +2,7 @@
 name: skill-bom-cli
 description: Manage declared Skill dependencies with the skill-bom CLI. Use for skills.toml, skills.lock, project or global Skill installation, provenance, drift checks, and JSON or SPDX BOM export.
 metadata:
-  version: "0.0.3"
+  version: "0.0.4"
 ---
 
 # Skill BOM CLI
@@ -16,9 +16,16 @@ Do not download or install a different executable without the user's request.
 Work in the user's selected project. Read its `skills.toml` and any existing
 `skills.lock` before changing dependencies. Source identity is explicit: use an
 owner-qualified ClawHub package, an AgentCenter Registry with an explicit
-skillId and token_env, a Git repository and optional subdirectory, or an HTTPS
+skillId, a Git repository and optional subdirectory, or an HTTPS
 archive with an exact version and SHA-256. Do not infer a source from
 a search result or from natural language in `SKILL.md`.
+
+For `https://agent.huawei.com`, the user can run `skill-bom auth login` to save
+their own W3 credentials in the system keyring. `auth status` reads local metadata;
+`auth logout` removes skill-bom's saved credentials. A nonempty configured
+`token_env` overrides that login and remains required for custom AgentCenter
+origins. Never ask the user to paste passwords or tokens into the conversation,
+arguments, declarations or lockfiles; login uses hidden input or password stdin.
 
 - Use `validate` to check declarations and `lock` to resolve the full graph.
 - Use `update [alias]` only when upgrades are requested; ordinary `install`

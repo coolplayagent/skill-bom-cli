@@ -1,6 +1,6 @@
 # 声明、锁和安装记录
 
-`skills.toml` 保存用户期望，`skill.toml` 保存发布者的包元数据。两者的依赖都使用显式来源模型。完整样例在 [examples/skills.toml](../../examples/skills.toml) 和 [examples/skill.toml](../../examples/skill.toml)。实现导出的 Schema 可通过 `skill-bom schema manifest|package|lock|bom|installed|error` 获取；仓库也保留对应的 [JSON Schema](../../schemas/manifest.schema.json)。
+`skills.toml` 保存用户期望，`skill.toml` 保存发布者的包元数据。两者的依赖都使用显式来源模型。完整样例在 [examples/skills.toml](https://github.com/coolplayagent/skill-bom-cli/blob/main/examples/skills.toml) 和 [examples/skill.toml](https://github.com/coolplayagent/skill-bom-cli/blob/main/examples/skill.toml)。实现导出的 Schema 可通过 `skill-bom schema manifest|package|lock|bom|installed|error` 获取；仓库也保留对应的 [JSON Schema](https://github.com/coolplayagent/skill-bom-cli/blob/main/schemas/manifest.schema.json)。
 
 `skills.lock` 是稳定排序的 JSON，记录格式/解析语义版本、声明摘要、根与传递依赖边、包身份、精确版本或 revision、来源证据、内容清单和部署目录。它不包含凭据、临时签名 URL、用户名或绝对安装路径。不同包即使名称相同也保留不同身份，部署前必须解决目录冲突。
 

@@ -15,4 +15,16 @@ bazel test --lockfile_mode=error //...
 
 跨平台发布包要在对应 runner 上执行二进制 smoke test。不要把某一平台的构建成功描述为所有平台已经运行验证。
 
+文档站使用 mdBook 0.5.4 和根目录的 `book.toml`。本地运行 `mdbook build`，
+输出位于 `target/book/`。`docs/SUMMARY.md` 声明全部章节；Rust 文档检查验证
+目录覆盖、内部链接和指向仓库文件的链接。`scripts/check-book.rs` 在发布前检查
+生成 HTML 的本地链接与静态资源。文档外的源码、Schema 和规范使用 GitHub
+文件链接；`book.toml` 保留 README 页面重定向，避免站点导航失效。
+
+`.github/workflows/pages.yml` 在文档变更或手动触发时构建站点，校验官方
+mdBook 归档的固定 SHA-256，再通过 GitHub Pages Actions 部署。
+Pull request 只构建；`main` 部署至
+[在线文档](https://coolplayagent.github.io/skill-bom-cli/)。仓库 Pages 的构建来源
+应配置为 GitHub Actions。
+
 [上一篇：架构](01-architecture.md) · [下一篇：验证](03-verification.md)

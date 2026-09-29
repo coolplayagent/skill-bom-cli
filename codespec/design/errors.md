@@ -10,7 +10,7 @@ clients should match codes. See [design](skill-bom-cli.md).
 | Resolution | VERSION_CONFLICT, DEPENDENCY_CYCLE, DIRECTORY_CONFLICT, RESOURCE_LIMIT |
 | Metadata | METADATA, METADATA_OVERRIDE, METADATA_UNKNOWN, VERSION_MISMATCH, SKILL_ENTRYPOINT |
 | Sources | SOURCE, SOURCE_IDENTITY_CHANGED, SOURCE_VERSION_UNAVAILABLE, SOURCE_BLOCKED, PROTOCOL, PAGINATION_LOOP, CHECKSUM_MISMATCH, CONTENT_CHANGED, SUBMODULE_UNMATERIALIZED, LFS_UNMATERIALIZED |
-| Transport/authentication | NETWORK, NETWORK_TIMEOUT, HTTP_RETRY_EXHAUSTED, RATE_LIMIT, HTTP_STATUS, MISSING_AUTH_TOKEN, AUTH_REQUIRED, GIT_UNAVAILABLE, GIT_FAILED, GIT_TIMEOUT, GIT_PROTOCOL, REVISION_AMBIGUOUS, PROCESS |
+| Transport/authentication | NETWORK, NETWORK_TIMEOUT, HTTP_RETRY_EXHAUSTED, RATE_LIMIT, HTTP_STATUS, AUTH_INPUT, MISSING_AUTH_TOKEN, AUTH_REQUIRED, AUTH_STORE_UNAVAILABLE, GIT_UNAVAILABLE, GIT_FAILED, GIT_TIMEOUT, GIT_PROTOCOL, REVISION_AMBIGUOUS, PROCESS |
 | Files/content | IO, JSON, PATH, UNSAFE_PATH, CASE_COLLISION, ARCHIVE, ARCHIVE_LINK, ARCHIVE_DUPLICATE, ARCHIVE_SIZE, CONTENT_MISSING, CACHE_KEY, CACHE_UNAVAILABLE, CACHE_CORRUPT, OFFLINE_MISS |
 | Installation | LOCK_REQUIRED, LOCK_INVALID, MANIFEST_CHANGED, MANIFEST_EXISTS, TARGET_OWNERSHIP, TARGET_BUSY, UNMANAGED_CONTROL, INSTALL_RECORD, INSTALL_CONFLICT, TRANSACTION_INVALID, RECOVERY_REQUIRED, NOT_INSTALLED |
 | Export/runtime | PACKAGE_QUERY, SPDX, USER_DIRECTORY, SIGNAL, INTERRUPTED |
@@ -20,3 +20,18 @@ before rerunning install. Run lock after intentional manifest edits. Retry onlin
 to repair a missing/corrupt cache. Registry ownership changes require explicit
 source declaration updates. Unsupported historical snapshots cannot be repaired
 by silently fetching latest content.
+
+W3 authentication errors use exit 2. AUTH_INPUT covers invalid input mode,
+empty/oversized fields and non-UTF-8 stdin. MISSING_AUTH_TOKEN covers an absent,
+non-string or blank secureLogin authToken and custom registries without an
+explicit token. AUTH_REQUIRED covers no local login, missing saved credentials,
+expired login responses and server authentication rejection. Native keyring,
+metadata and lock failures use AUTH_STORE_UNAVAILABLE, without echoing the
+backend error. Linux Secret Service unavailability never falls back to a file.
+
+Login/refresh failures contain `skill-bom auth login` guidance. Transport and
+protocol failures retain their codes. An explicit token rejection tells callers
+to replace token_env; it never silently switches to the saved account. Logout
+propagates cleanup failures, retains references for retry and emits no success
+output. Server error bodies, passwords and tokens must not appear in errors.
+See [W3 authentication](w3-auth.md) for persistence and concurrency semantics.

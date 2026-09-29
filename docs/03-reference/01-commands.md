@@ -12,6 +12,8 @@
 | `list` / `verify` | 查看安装记录及内容漂移 |
 | `bom` | 导出锁定或安装 BOM |
 | `schema <kind>` | 导出版本化 JSON Schema |
+| `auth login [--username NAME] [--password-stdin]` | 登录 W3；默认隐藏密码输入，脚本需同时提供两个选项 |
+| `auth status` / `auth logout` | 查看本地记录 / 清理 skill-bom 自身凭据；无需项目配置 |
 
 通用选项有 `--manifest PATH`、`--global`、`--target PATH`、`--offline`、`--strict-metadata`、`--format json`。`--format spdx-json` 只适用于 `bom`。`install --locked` 要求匹配的锁；`install --frozen` 还禁止网络；`install --dry-run` 输出计划而不修改目标或锁。
 
@@ -20,5 +22,12 @@
 `bom --from lock` 是默认视图；`bom --from installed` 验证安装。`--timestamp RFC3339` 或 `SOURCE_DATE_EPOCH` 可固定生成时间。运行 `skill-bom --help` 和各子命令的 `--help` 可查看当前二进制接受的完整参数。
 
 退出码 `0` 表示完成，允许明确列出的警告；`1` 表示确定失败或漂移；`2` 表示无效输入、网络/缓存不足等未完成操作；`130` 表示用户中断。`--format json` 的成功结果写 stdout，日志和结构化错误写 stderr。错误包含稳定代码、阶段、包身份、依赖链和修复提示。
+
+认证错误包括 `AUTH_INPUT`（输入方式或内容无效）、`MISSING_AUTH_TOKEN`
+（登录响应缺少 token，或自定义 Registry 未提供显式 token）、`AUTH_REQUIRED`
+（未登录、会话失效或认证被拒）及 `AUTH_STORE_UNAVAILABLE`（凭据库、元数据
+或进程锁不可用）。均以退出码 2 返回；刷新过程的网络/协议错误保留其代码，
+并附带 `skill-bom auth login` 指引。退出清理失败不会输出成功结果。
+完整契约见[错误代码](https://github.com/coolplayagent/skill-bom-cli/blob/main/codespec/design/errors.md)。
 
 [上一篇：参考目录](README.md) · [下一篇：文件格式](02-file-formats.md)

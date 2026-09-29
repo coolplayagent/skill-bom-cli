@@ -4,6 +4,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
+#[path = "domain/auth.rs"]
+pub mod auth;
+
 pub type Result<T> = std::result::Result<T, Error>;
 pub const SCHEMA: u32 = 1;
 pub const RESOLVER: &str = "1";

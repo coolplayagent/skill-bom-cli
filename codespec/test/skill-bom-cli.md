@@ -20,15 +20,25 @@ it does not predeclare passing results. Actual runs are recorded separately in
 | R11 | cli/quality: deterministic timestamp and graph, installed view with drift, unknown metadata, no absolute paths |
 | R12 | cli/quality: pinned official SPDX 2.3 Schema, relationship references, checksum scope and NOASSERTION |
 | R13 | quality: architecture DAG, I/O boundaries, authored file budget, docs/examples/Schemas, Cargo/Bazel toolchain alignment; independent CI gates |
-| R14 | quality: source Bazel target boundaries, book reachability and links, Skill/Cargo version agreement, deterministic archive contents; Bazel builds CLI and Skill package, release workflow checks each native binary |
+| R14 | quality: source Bazel target boundaries, book reachability, mdBook chapter coverage and source links, Skill/Cargo version agreement, deterministic archive contents; Bazel builds CLI and Skill package, release workflow checks each native binary; docs-pages builds with pinned mdBook, runs the Rust generated-link checker and deploys main to GitHub Pages |
 | R15 | agentcenter: explicit skillId/config, X-Auth-Token GET/POST, identity/business errors, latest SemVer selection, ZIP/content evidence, offline install, historical lock re-fetch and unavailable fresh historical request; Bazel adapter target and CLI lock/install/verify/BOM |
 | R16 | cli: sync first install, repeat, preview, offline and unknown alias, upgrade, verified deployment and lock/installation agreement, source failure, content mismatch and installation conflict/local modification preservation |
+| R17 | auth: lifecycle, rejected login preservation, storage faults, journals, namespace isolation, explicit overrides, read/write replay and logout fencing; auth_protocol: W3 token/expiry fixtures, AgentCenter refresh, trusted origin, cache/offline zero calls and HTTP auth signals; auth_process: cross-process refresh merging, logout fencing, bounded lock waiting and process interruption after each secret write; auth_cli: manifest-independent commands, local status, stdin constraints, redaction, unavailable isolated Linux bus; domain/net/interfaces/keyring unit tests: pure expiry including clock overflow, exact secureLogin wire headers/body, redirects, input and official mock backend error mapping |
 
 The AgentCenter fixture is derived from Issue #2's reported contract. Internal
 RelayAgent source, a versioned API Schema and live service credentials were not
 available here; therefore only the local HTTP fixture is verified. The API's
 historical version binding remains unproven, so fresh historical resolution is
 rejected. Live smoke requires an authorized service and a disposable test Skill.
+
+W3 fixtures follow Issue #3, including its confirmed HTTPS secureLogin endpoint.
+Credential tests use injected memory stores or fixture-only files in temporary
+directories; no real Agent login state is read or changed. Keyring mapping unit
+tests use keyring-core's mock backend without installing a process-global store.
+The Linux CLI failure test points D-Bus at a nonexistent temporary socket.
+No actual Windows Credential Manager, macOS Keychain or successful Linux Secret
+Service login is claimed by those fixtures. W3/AgentCenter live authentication
+requires authorized credentials and is recorded separately if exercised.
 
 Unit tests (`cargo test --locked --lib --bins --all-features`) and integration
 tests (`cargo test --locked --tests --all-features`) are separate entry points.

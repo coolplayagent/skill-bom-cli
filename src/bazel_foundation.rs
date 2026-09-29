@@ -1,4 +1,6 @@
 //! Bazel composition for contracts and shared I/O boundaries.
+#[path = "auth/mod.rs"]
+pub mod auth;
 #[path = "config.rs"]
 pub mod config;
 #[path = "domain.rs"]

@@ -1,11 +1,14 @@
 # Skill BOM CLI design
 
-See [requirements R01–R15](../requirements/skill-bom-cli.md) and
+See [requirements R01–R17](../requirements/skill-bom-cli.md) and
 [test contract](../test/skill-bom-cli.md). Rust library modules are reusable;
 the binary installs interruption handling and delegates parsing/orchestration.
 
 The Issue #2 [AgentCenter Registry extension](agentcenter.md) adds R15 while
 preserving the existing source, store and installer boundaries.
+Issue #3's [W3 authentication](w3-auth.md) adds R17 with an injectable credential
+provider and skill-bom's own system-keyring login, keeping credentials out of
+declarations and lockfiles.
 
 ## Declarations and identity
 

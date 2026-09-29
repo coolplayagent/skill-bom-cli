@@ -1,6 +1,6 @@
 [package]
 name = "skill-bom"
-version = "0.0.3"
+version = "0.0.4"
 edition = "2024"
 rust-version = "1.97"
 description = "Reproducible Skill dependency installation and bills of materials"
@@ -29,6 +29,10 @@ fs2 = "0.4"
 directories = "6"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 ctrlc = "3"
+keyring-core = "1.0"
+rpassword = "7"
+zeroize = "1"
+uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 syn = { version = "2", features = ["full", "visit"] }
@@ -43,3 +47,12 @@ strip = true
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31", features = ["signal", "process"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus-secret-service-keyring-store = { version = "1.0", features = ["crypto-rust"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-native-keyring-store = { version = "1.0", features = ["keychain"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-native-keyring-store = { version = "1.1", default-features = false }

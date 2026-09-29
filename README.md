@@ -6,7 +6,8 @@ It never executes Skill content, installs runtime tools, configures MCP, or
 publishes to a registry. `skill.toml` is this project's dependency protocol,
 not a ClawHub standard.
 
-The [book](docs/README.md) is the user and contributor guide. The
+The [online book](https://coolplayagent.github.io/skill-bom-cli/)
+([Markdown source](docs/README.md)) is the user and contributor guide. The
 [CLI Skill](skills/skill-bom-cli/SKILL.md) wraps the executable for Agent use;
 the release archive publishes that Skill together with platform binaries.
 
@@ -44,7 +45,8 @@ project environments. Actual manifest, lock and target paths are printed to
 stderr. JSON command results go to stdout; errors/diagnostics go to stderr.
 
 ClawHub references must be owner qualified (`@owner/slug`). AgentCenter uses an
-explicit stable skillId and a W3 `X-Auth-Token` from `token_env`; its reported
+explicit stable skillId and a W3 login (`skill-bom auth login`) or an explicit
+`X-Auth-Token` from `token_env`; its reported
 detail API exposes only the latest SemVer candidate for a fresh lock. See the
 [AgentCenter chapter](docs/02-user-guide/04-agentcenter.md). HTTPS archives need
 an exact `=x.y.z` version and SHA-256. Git tags default to `v{version}`; a `rev`
@@ -52,6 +54,13 @@ selector instead pins a full commit without inventing a semantic version.
 Credential-bearing URLs and URL query strings are rejected. SSH uses the
 conventional `git` user and existing Git credentials. A registry's `token_env`
 selects its Bearer or AgentCenter token; the value is never serialized or sent across origins.
+
+`skill-bom auth login` prompts for a W3 username and a hidden password. Scripted
+login uses `--username NAME --password-stdin`. Passwords and tokens are kept in
+skill-bom's own system keyring entries, isolated by the user config root.
+`auth status` reports local metadata only; `auth logout` clears these credentials.
+Automatic tokens are confined to `https://agent.huawei.com`. Linux requires an
+available Secret Service; headless CI can continue to use `token_env`.
 Loopback HTTP is allowed for local tests; remote archives/registries require HTTPS.
 
 A Skill must contain exactly one of `SKILL.md`, `skill.md`, or `skills.md`.

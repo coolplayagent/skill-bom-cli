@@ -1,8 +1,14 @@
 # 测试与证据
 
-普通测试使用临时 Git 仓库、本地 Rust HTTP 服务和隔离目标，不依赖公网，也不改变用户 Git 配置。验收矩阵在 [CodeSpec 测试契约](../../codespec/test/skill-bom-cli.md)。ClawHub 契约 fixtures 固定在上游源码基线；在线 smoke 单独运行并记录服务可用性。
+普通测试使用临时 Git 仓库、本地 Rust HTTP 服务和隔离目标，不依赖公网，也不改变用户 Git 配置。验收矩阵在 [CodeSpec 测试契约](https://github.com/coolplayagent/skill-bom-cli/blob/main/codespec/test/skill-bom-cli.md)。ClawHub 契约 fixtures 固定在上游源码基线；在线 smoke 单独运行并记录服务可用性。
 
 AgentCenter 的 HTTP fixtures 覆盖 `X-Auth-Token`、详情身份、ZIP 下载、限流、业务认证错误、离线缓存与端到端 CLI。其协议形状来自 [Issue #2](https://github.com/coolplayagent/skill-bom-cli/issues/2)；内部服务源码和凭据不在本仓库，尚无真实 AgentCenter 在线 smoke 证据。新锁定只使用详情接口报告的最新版本。
+
+W3 认证的显式测试目标为 `auth`、`auth_protocol`、`auth_process`、`auth_cli`，
+均已列入 CI、Bazel 和 Qualitygate。测试使用替身存储、可控时钟、临时目录和
+独立子进程；协议依据 [Issue #3](https://github.com/coolplayagent/skill-bom-cli/issues/3)。
+Linux 凭据库失败测试使用不存在的临时 D-Bus 地址，不访问真实登录态。
+系统凭据库适配器使用官方 mock 测试；真实平台后端及 W3 在线登录需另行记录。
 
 ```sh
 cargo fmt --all -- --check

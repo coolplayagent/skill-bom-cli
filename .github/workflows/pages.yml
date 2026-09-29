@@ -1,0 +1,59 @@
+name: docs-pages
+on:
+  push:
+    branches: [main]
+    paths: ["docs/**", "book.toml", "scripts/check-book.rs", ".github/workflows/pages.yml"]
+  pull_request:
+    paths: ["docs/**", "book.toml", "scripts/check-book.rs", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download pinned mdBook binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/mdbook.tar.gz"
+          curl --fail --location --proto '=https' --tlsv1.2 --max-time 120 --retry 3 \
+            https://github.com/rust-lang/mdBook/releases/download/v0.5.4/mdbook-v0.5.4-x86_64-unknown-linux-gnu.tar.gz \
+            --output "$archive"
+          echo "3f28de05dafca9d0f2eab99c662116b0e37b89b1d96a08f8f430b9eeae958cd7  $archive" | sha256sum --check
+          tar -xzf "$archive" -C "$RUNNER_TEMP" mdbook
+          "$RUNNER_TEMP/mdbook" --version
+      - name: Build book
+        run: '"$RUNNER_TEMP/mdbook" build'
+      - name: Check generated links and assets
+        run: |
+          rustfmt --edition 2024 --check scripts/check-book.rs
+          rustc --edition 2024 -D warnings scripts/check-book.rs -o "$RUNNER_TEMP/check-book"
+          "$RUNNER_TEMP/check-book" target/book
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: target/book
+
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - uses: actions/deploy-pages@v4
+        id: deployment

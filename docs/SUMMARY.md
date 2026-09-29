@@ -1,0 +1,21 @@
+# 目录
+
+[Skill BOM CLI：使用与实现](README.md)
+
+- [入门](01-getting-started/README.md)
+  - [安装 CLI](01-getting-started/01-installation.md)
+  - [首个锁文件与安装](01-getting-started/02-first-lock.md)
+  - [使用 CLI Skill](01-getting-started/03-cli-skill.md)
+- [使用指南](02-user-guide/README.md)
+  - [编写依赖声明](02-user-guide/01-declarations.md)
+  - [版本解析与更新](02-user-guide/02-resolution.md)
+  - [安装、离线与事务](02-user-guide/03-installation.md)
+  - [AgentCenter 与 W3 登录](02-user-guide/04-agentcenter.md)
+- [参考手册](03-reference/README.md)
+  - [命令](03-reference/01-commands.md)
+  - [文件格式](03-reference/02-file-formats.md)
+  - [BOM 与审计](03-reference/03-bom.md)
+- [贡献者指南](04-contributor-guide/README.md)
+  - [架构与模块边界](04-contributor-guide/01-architecture.md)
+  - [构建与发布](04-contributor-guide/02-build-and-release.md)
+  - [测试与证据](04-contributor-guide/03-verification.md)

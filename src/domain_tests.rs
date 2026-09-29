@@ -1,4 +1,44 @@
 use super::*;
+
+#[test]
+fn auth_expiry_and_refresh_are_pure() {
+    use auth::{ExpirySource, Session, expiry};
+    let now = chrono::DateTime::from_timestamp(1_790_640_000, 0).unwrap();
+    let (expires_at, expiry_source) = expiry(&serde_json::json!({}), now);
+    assert_eq!(expires_at, now + chrono::Duration::hours(4));
+    assert_eq!(expiry_source, ExpirySource::LocalPolicy);
+    let session = Session {
+        username: "alice".into(),
+        issued_at: now,
+        expires_at,
+        expiry_source,
+        credential_ref: "reference".into(),
+        login_id: "login".into(),
+    };
+    assert!(!session.refresh_due(now + chrono::Duration::seconds(7199)));
+    assert!(session.refresh_due(now + chrono::Duration::hours(2)));
+    assert!(session.refresh_due(now - chrono::Duration::seconds(1)));
+    let (expires_at, source) = expiry(
+        &serde_json::json!({"cloudDragonTokens":{"expiresIn":3600},"expiresAt":(now + chrono::Duration::seconds(20)).to_rfc3339()}),
+        now,
+    );
+    assert_eq!(source, ExpirySource::Server);
+    assert_eq!(expires_at, now + chrono::Duration::seconds(20));
+}
+#[test]
+fn auth_expiry_overflow_is_checked_without_discarding_usable_server_values() {
+    use auth::{ExpirySource, expiry};
+    let now = chrono::DateTime::<chrono::Utc>::MAX_UTC - chrono::Duration::seconds(10);
+    assert_eq!(
+        expiry(&serde_json::json!({}), now),
+        (now, ExpirySource::LocalPolicy)
+    );
+    let response = serde_json::json!({"cloudDragonTokens":{"expiresIn":1}});
+    assert_eq!(
+        expiry(&response, now),
+        (now + chrono::Duration::seconds(1), ExpirySource::Server)
+    );
+}
 fn empty() -> Lock {
     Lock {
         schema_version: SCHEMA,

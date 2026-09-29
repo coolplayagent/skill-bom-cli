@@ -26,9 +26,10 @@ and [test evidence](../test/skill-bom-cli.md).
 | R14 | Archive, Git and ClawHub source adapters and source orchestration are separate Bazel `rust_library` compilation units with Cargo API parity; a version-matched CLI Skill plus platform binaries forms one verified release archive, and a navigable book documents use, formats, architecture and verification. |
 | R15 | An explicit AgentCenter Registry uses stable skillId identity, origin-bound X-Auth-Token, direct detail and versioned ZIP download, validated response and archive bytes, independent archive/tree hashes, existing cache and install transactions, and a separate Bazel library. Fresh resolution offers only the reported latest SemVer; unavailable historical versions fail closed. |
 | R16 | `sync [alias]` upgrades using update's root selection, verifies all resolved content before deployment, and writes the lock only after successful installation. Preview reports changes and conflicts without changing lock or target; offline sync fails explicitly. A post-deployment lock-write failure reports the reconciliation command. |
+| R17 | W3 auth login/status/logout work before manifest loading with text/JSON output. Hidden interactive or bounded stdin passwords, fixed HTTPS secureLogin, official OS credential stores, isolated single-account state, explicit-token precedence, trusted-origin confinement, declared expiry/default four-hour half-life policy, one refresh/replay per rejected read, bounded cross-process lock and logout tombstones. Validation, cache hits and offline operations never acquire credentials. Failures redact secrets and never claim successful cleanup. See [W3 design](../design/w3-auth.md). |
 
 Required CLI commands are init, validate, lock, update [alias], sync [alias], install, tree,
-why, list, verify and bom. Install supports locked/frozen/dry-run; common options
+why, list, verify, bom and auth login/status/logout. Install supports locked/frozen/dry-run; common options
 select manifest, global scope, target, offline access, JSON output and strict
 metadata. `schema` additionally exports implementation-generated JSON Schemas.
 

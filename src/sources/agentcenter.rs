@@ -1,6 +1,7 @@
 //! AgentCenter's skillId-addressed HTTP registry. The contract is based on Issue #2.
 use crate::domain::*;
 use crate::{
+    auth::{self, CredentialProvider, Operation, SystemProvider},
     config::{self, Manifest},
     env,
     net::Transport,
@@ -22,7 +23,7 @@ fn parts(source: &Source) -> Result<(&str, &str, &str)> {
     }
 }
 
-fn token(manifest: &Manifest, registry: &str) -> Result<String> {
+fn token(manifest: &Manifest, registry: &str) -> Option<String> {
     manifest
         .registries
         .values()
@@ -32,14 +33,6 @@ fn token(manifest: &Manifest, registry: &str) -> Result<String> {
         .and_then(|r| r.token_env.as_deref())
         .and_then(env::variable)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| {
-            Error::new(
-                "MISSING_AUTH_TOKEN",
-                "AgentCenter X-Auth-Token environment variable is missing",
-                2,
-            )
-            .hint("Set the token_env variable configured for this Registry.")
-        })
 }
 
 fn endpoint(registry: &str, path: &str, skill_id: Option<&str>) -> Result<String> {
@@ -53,6 +46,7 @@ fn endpoint(registry: &str, path: &str, skill_id: Option<&str>) -> Result<String
 }
 
 fn payload(response: crate::net::Response) -> Result<Value> {
+    check_empty(&response)?;
     let value: Value = serde_json::from_slice(&response.bytes)
         .map_err(|_| Error::new("PROTOCOL", "AgentCenter returned invalid JSON", 2))?;
     let code = value.get("code").and_then(|v| {
@@ -81,16 +75,34 @@ fn payload(response: crate::net::Response) -> Result<Value> {
         .ok_or_else(|| Error::new("PROTOCOL", "AgentCenter response has no data object", 2))
 }
 
-fn detail(http: &impl Transport, manifest: &Manifest, source: &Source) -> Result<Value> {
+fn check_empty(response: &crate::net::Response) -> Result<()> {
+    if response.bytes.trim_ascii().is_empty() || response.bytes.trim_ascii() == b"null" {
+        return Err(auth::required(
+            "AgentCenter returned an empty authentication response",
+        ));
+    }
+    Ok(())
+}
+
+fn detail(
+    http: &impl Transport,
+    credentials: &dyn CredentialProvider,
+    manifest: &Manifest,
+    source: &Source,
+) -> Result<Value> {
     let (registry, skill_id, _) = parts(source)?;
-    let data = payload(http.get_x_auth(
-        &endpoint(
-            registry,
-            "/mcpService/external/skills/v1/get",
-            Some(skill_id),
-        )?,
-        &token(manifest, registry)?,
-    )?)?;
+    let url = endpoint(
+        registry,
+        "/mcpService/external/skills/v1/get",
+        Some(skill_id),
+    )?;
+    let data = auth::execute(
+        credentials,
+        registry,
+        token(manifest, registry),
+        Operation::Read,
+        |token| payload(http.get_x_auth(&url, token)?),
+    )?;
     if data.get("skillId").and_then(Value::as_str) != Some(skill_id) {
         return fail(
             "SOURCE_IDENTITY_CHANGED",
@@ -106,7 +118,17 @@ pub fn candidates(
     source: &Source,
     request: &Dependency,
 ) -> Result<Vec<Candidate>> {
-    let data = detail(http, manifest, source)?;
+    candidates_with_auth(http, &SystemProvider, manifest, source, request)
+}
+
+pub fn candidates_with_auth(
+    http: &impl Transport,
+    credentials: &dyn CredentialProvider,
+    manifest: &Manifest,
+    source: &Source,
+    request: &Dependency,
+) -> Result<Vec<Candidate>> {
+    let data = detail(http, credentials, manifest, source)?;
     let version = data
         .get("latestVersion")
         .or_else(|| data.get("version"))
@@ -141,8 +163,28 @@ pub fn fetch(
     expected_archive: Option<&str>,
     dest: &Path,
 ) -> Result<(PathBuf, Candidate, Evidence)> {
+    fetch_with_auth(
+        http,
+        &SystemProvider,
+        manifest,
+        source,
+        candidate,
+        expected_archive,
+        dest,
+    )
+}
+
+pub fn fetch_with_auth(
+    http: &impl Transport,
+    credentials: &dyn CredentialProvider,
+    manifest: &Manifest,
+    source: &Source,
+    candidate: &Candidate,
+    expected_archive: Option<&str>,
+    dest: &Path,
+) -> Result<(PathBuf, Candidate, Evidence)> {
     let (registry, skill_id, subdir) = parts(source)?;
-    let data = detail(http, manifest, source)?;
+    let data = detail(http, credentials, manifest, source)?;
     let version = candidate.version.as_deref().ok_or_else(|| {
         Error::new(
             "SOURCE_VERSION_UNAVAILABLE",
@@ -162,18 +204,27 @@ pub fn fetch(
             "AgentCenter cannot prove this historical version is available",
         );
     }
-    let response = http.post_json(
-        &endpoint(registry, "/mcpService/external/skills/v1/download", None)?,
-        &json!({"skillId":skill_id,"version":version}),
-        &token(manifest, registry)?,
+    let url = endpoint(registry, "/mcpService/external/skills/v1/download", None)?;
+    let body = json!({"skillId":skill_id,"version":version});
+    // This POST downloads immutable bytes; it is explicitly a replayable read.
+    let response = auth::execute(
+        credentials,
+        registry,
+        token(manifest, registry),
+        Operation::Read,
+        |token| {
+            let response = http.post_json(&url, &body, token)?;
+            check_empty(&response)?;
+            if response.content_type.contains("json") {
+                payload(response)?;
+                return fail(
+                    "PROTOCOL",
+                    "AgentCenter download returned JSON instead of ZIP",
+                );
+            }
+            Ok(response)
+        },
     )?;
-    if response.content_type.contains("json") {
-        payload(response)?;
-        return fail(
-            "PROTOCOL",
-            "AgentCenter download returned JSON instead of ZIP",
-        );
-    }
     if !response.bytes.starts_with(b"PK")
         || !(response.content_type.contains("zip")
             || response.content_type.contains("octet-stream"))

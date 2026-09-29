@@ -10,8 +10,9 @@ establish that the internal service currently serves those shapes. The
 ## Declaration and identity
 
 `[registries.alias]` accepts `kind = "agentcenter"`, a credential-free HTTPS
-base URL and required `token_env`. The named environment variable supplies the
-W3 `X-Auth-Token` value; it is never serialized. Each dependency uses the
+base URL and optional `token_env`. A nonempty named environment variable supplies
+the authoritative W3 `X-Auth-Token`; otherwise the trusted origin uses skill-bom's
+own [W3 login](w3-auth.md). Secrets are never serialized in declarations or locks. Each dependency uses the
 Registry alias, a stable `skillId` in `package`, and a SemVer `version` request.
 `tag` and `rev` are unsupported. An optional explicit `subdir` selects the ZIP
 package root; without it, the archive root must contain exactly one recognized
@@ -47,7 +48,8 @@ The adapter calls `GET /mcpService/external/skills/v1/get?skillId=...` and
 The detail response must contain a successful `code` (0, 200 or 20000) or
 `success: true`, an object `data`, the exact requested `skillId` and a valid
 SemVer `latestVersion` (or `version`). Numeric/string business codes are
-accepted. HTTP 401/403 and business 40100/40300 fail as `AUTH_REQUIRED`;
+accepted. HTTP 400/401/403, empty/null responses and business 40100/40300 signal `AUTH_REQUIRED`;
+automatic credentials allow one refresh and read replay, while explicit tokens do not refresh;
 there is no fallback to Git. Non-JSON errors are reported by HTTP status,
 without echoing response bodies. Requests have bounded retries, timeouts and
 response sizes. AgentCenter authenticated requests reject redirects; TLS

@@ -1,6 +1,6 @@
 # Skill BOM CLI：使用与实现
 
-这本书从一个可复现的项目安装开始，逐步说明声明、锁定、部署、审计以及开发本工具的方式。每一章都是普通 Markdown，可以直接在 GitHub 阅读，无需文档生成器。规范性需求仍以 [CodeSpec](../codespec/requirements/skill-bom-cli.md) 为准。
+这本书从一个可复现的项目安装开始，逐步说明声明、锁定、部署、审计以及开发本工具的方式。每一章都是普通 Markdown，可以直接在 GitHub 阅读，也可以访问 [在线文档](https://coolplayagent.github.io/skill-bom-cli/)。完整章节见 [目录](https://github.com/coolplayagent/skill-bom-cli/blob/main/docs/SUMMARY.md)。规范性需求仍以 [CodeSpec](https://github.com/coolplayagent/skill-bom-cli/blob/main/codespec/requirements/skill-bom-cli.md) 为准。
 
 1. [入门](01-getting-started/README.md)：安装 CLI，创建首个声明，认识 CLI Skill 发布包。
 2. [使用指南](02-user-guide/README.md)：配置来源、解析版本、安装与离线运行。

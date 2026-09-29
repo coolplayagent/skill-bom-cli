@@ -4,6 +4,17 @@ use reqwest::{Method, blocking::Client, header};
 use std::io::Read;
 use std::time::{Duration, Instant, SystemTime};
 
+#[path = "net/login.rs"]
+mod login;
+pub use login::W3_LOGIN_URL;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AuthMode {
+    Bearer,
+    XAuth,
+    Login,
+}
+
 pub struct Http {
     client: Client,
     loopback: Client,
@@ -35,13 +46,13 @@ impl Http {
         })
     }
     pub fn get(&self, url: &str, token: Option<&str>) -> Result<Response> {
-        self.request(Method::GET, url, None, token, false)
+        self.request(Method::GET, url, None, token, AuthMode::Bearer)
     }
     pub fn get_x_auth(&self, url: &str, token: &str) -> Result<Response> {
-        self.request(Method::GET, url, None, Some(token), true)
+        self.request(Method::GET, url, None, Some(token), AuthMode::XAuth)
     }
     pub fn post_json(&self, url: &str, body: &serde_json::Value, token: &str) -> Result<Response> {
-        self.request(Method::POST, url, Some(body), Some(token), true)
+        self.request(Method::POST, url, Some(body), Some(token), AuthMode::XAuth)
     }
     fn request(
         &self,
@@ -49,7 +60,7 @@ impl Http {
         url: &str,
         body: Option<&serde_json::Value>,
         token: Option<&str>,
-        x_auth: bool,
+        mode: AuthMode,
     ) -> Result<Response> {
         if self.offline {
             return Err(Error::new(
@@ -85,7 +96,7 @@ impl Http {
             if current.origin() == original.origin()
                 && let Some(t) = token
             {
-                request = if x_auth {
+                request = if mode == AuthMode::XAuth {
                     request.header("X-Auth-Token", t)
                 } else {
                     request.bearer_auth(t)
@@ -93,6 +104,9 @@ impl Http {
             }
             if let Some(value) = body {
                 request = request.json(value);
+            }
+            if mode == AuthMode::Login {
+                request = login::headers(request);
             }
             let mut res = match request.send() {
                 Ok(response) => response,
@@ -104,11 +118,8 @@ impl Http {
                 Err(_) => return Err(Error::new("NETWORK","HTTP request failed or timed out",2).phase("download").hint("Check connectivity and retry; credentials are read from the configured environment variable.")),
             };
             if res.status().is_redirection() {
-                if x_auth {
-                    return fail(
-                        "PROTOCOL",
-                        "AgentCenter authenticated redirects are not accepted",
-                    );
+                if mode != AuthMode::Bearer {
+                    return fail("PROTOCOL", "Authentication redirects are not accepted");
                 }
                 redirects += 1;
                 if redirects > 5 {
@@ -167,13 +178,23 @@ impl Http {
             }
             if !res.status().is_success() {
                 let status = res.status().as_u16();
-                if x_auth && matches!(status, 401 | 403) {
-                    return fail("AUTH_REQUIRED", "AgentCenter authentication was rejected");
+                if mode != AuthMode::Bearer && matches!(status, 400 | 401 | 403) {
+                    return Err(Error::new("AUTH_REQUIRED", "Authentication was rejected", 2)
+                        .phase("authentication")
+                        .hint("Run skill-bom auth login, or replace the explicit token_env value."));
                 }
                 // Error bodies can echo credentials; expose only bounded status/protocol data.
                 return Err(Error::new(if matches!(status,403|410|423) {"SOURCE_BLOCKED"} else if status==404 {"SOURCE_VERSION_UNAVAILABLE"} else {"HTTP_STATUS"},format!("HTTP {status} (server rejected request; JSON and text errors are supported)"),if status>=500 {2} else {1}).phase("download"));
             }
-            if res.content_length().is_some_and(|n| n > MAX_DOWNLOAD) {
+            let limit = if mode == AuthMode::Login {
+                1024 * 1024
+            } else {
+                MAX_DOWNLOAD
+            };
+            if mode == AuthMode::Login && res.status().as_u16() != 200 {
+                return Err(Error::new("PROTOCOL", "W3 login requires HTTP 200", 2));
+            }
+            if res.content_length().is_some_and(|n| n > limit) {
                 return Err(Error::new(
                     "RESOURCE_LIMIT",
                     "HTTP response exceeds download limit",
@@ -187,8 +208,11 @@ impl Http {
                 .unwrap_or("")
                 .to_ascii_lowercase();
             let mut bytes = vec![];
-            (&mut res).take(MAX_DOWNLOAD + 1).read_to_end(&mut bytes)?;
-            if bytes.len() as u64 > MAX_DOWNLOAD {
+            (&mut res)
+                .take(limit + 1)
+                .read_to_end(&mut bytes)
+                .map_err(|_| Error::new("NETWORK", "Cannot read HTTP response", 2))?;
+            if bytes.len() as u64 > limit {
                 return Err(Error::new(
                     "RESOURCE_LIMIT",
                     "HTTP response exceeds download limit",
@@ -218,6 +242,13 @@ fn retry_after(s: &str) -> Option<Duration> {
 /// Injectable HTTP boundary used by source contract tests and embedding applications.
 pub trait Transport {
     fn get(&self, url: &str, token: Option<&str>) -> Result<Response>;
+    fn secure_login(&self, _username: &str, _password: &str) -> Result<Response> {
+        Err(Error::new(
+            "PROTOCOL",
+            "Transport has no W3 login support",
+            2,
+        ))
+    }
     fn get_x_auth(&self, _url: &str, _token: &str) -> Result<Response> {
         Err(Error::new(
             "PROTOCOL",
@@ -239,6 +270,9 @@ pub trait Transport {
     }
 }
 impl Transport for Http {
+    fn secure_login(&self, username: &str, password: &str) -> Result<Response> {
+        Http::secure_login(self, username, password)
+    }
     fn get(&self, url: &str, token: Option<&str>) -> Result<Response> {
         Http::get(self, url, token)
     }

@@ -69,12 +69,6 @@ impl Manifest {
                 );
             }
             let registry_url = web_url(&r.url)?;
-            if r.kind == "agentcenter" && r.token_env.is_none() {
-                return fail(
-                    "REGISTRY",
-                    "AgentCenter requires token_env for X-Auth-Token",
-                );
-            }
             if r.kind == "agentcenter"
                 && url::Url::parse(&registry_url).is_ok_and(|url| url.path() != "/")
             {
