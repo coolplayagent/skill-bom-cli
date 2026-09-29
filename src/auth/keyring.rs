@@ -61,7 +61,16 @@ mod tests {
     #[test]
     fn keyring_adapter_maps_missing_and_redacts_backend_errors() {
         let store = keyring_core::mock::Store::new().unwrap();
+        #[cfg(not(target_os = "windows"))]
         let entry = entry(store.as_ref(), "isolated-test", "ref").unwrap();
+        #[cfg(target_os = "windows")]
+        let entry = {
+            // The official mock rejects Windows-specific persistence modifiers.
+            // Check that rejection is mapped, then exercise read/delete on the mock.
+            let error = entry(store.as_ref(), "isolated-test", "ref").unwrap_err();
+            assert_eq!(error.code, "AUTH_STORE_UNAVAILABLE");
+            store.build("isolated-test", "ref", None).unwrap()
+        };
         assert!(read(&entry).unwrap().is_none());
         entry.set_password("private-password").unwrap();
         assert_eq!(read(&entry).unwrap().unwrap().expose(), "private-password");
