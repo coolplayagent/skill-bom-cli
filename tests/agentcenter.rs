@@ -121,7 +121,7 @@ fn config_identity_and_protocol_errors_fail_closed() {
         )
         .unwrap_err()
         .code,
-        "MISSING_AUTH_TOKEN"
+        "AUTH_REQUIRED"
     );
 }
 

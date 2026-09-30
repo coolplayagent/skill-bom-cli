@@ -12,8 +12,9 @@
 | `list` / `verify` | 查看安装记录及内容漂移 |
 | `bom` | 导出锁定或安装 BOM |
 | `schema <kind>` | 导出版本化 JSON Schema |
-| `auth login [--username NAME] [--password-stdin]` | 登录 W3；默认隐藏密码输入，脚本需同时提供两个选项 |
-| `auth status` / `auth logout` | 查看本地记录 / 清理 skill-bom 自身凭据；无需项目配置 |
+| `auth login [--origin URL] [--username NAME] [--password-stdin\|--token-stdin]` | 官方 AgentCenter 登录 W3；其它 origin 保存账号和 Token |
+| `auth status [--origin URL\|--all]` | 查看指定 origin 或全部本地登录记录；无需项目配置 |
+| `auth logout [--origin URL]` | 只清理所选 origin 的凭据；省略 origin 时为官方 AgentCenter |
 
 通用选项有 `--manifest PATH`、`--global`、`--target PATH`、`--agent universal|codex|claude-code|cursor|relayagent`、`--offline`、`--strict-metadata`、`--format json`。`--format spdx-json` 只适用于 `bom`。`install --locked` 要求匹配的锁；`install --frozen` 还禁止网络；`install --dry-run` 输出计划而不修改目标或锁。
 
@@ -24,11 +25,16 @@
 退出码 `0` 表示完成，允许明确列出的警告；`1` 表示确定失败或漂移；`2` 表示无效输入、网络/缓存不足等未完成操作；`130` 表示用户中断。`--format json` 的成功结果写 stdout，日志和结构化错误写 stderr。错误包含稳定代码、阶段、包身份、依赖链和修复提示。
 
 认证错误包括 `AUTH_INPUT`（输入方式或内容无效）、`MISSING_AUTH_TOKEN`
-（登录响应缺少 token，或自定义 Registry 未提供显式 token）、`AUTH_REQUIRED`
+（登录响应缺少 token，或凭据提供器属于另一个 origin）、`AUTH_REQUIRED`
 （未登录、会话失效或认证被拒）及 `AUTH_STORE_UNAVAILABLE`（凭据库、元数据
 或进程锁不可用）。均以退出码 2 返回；刷新过程的网络/协议错误保留其代码，
 并附带 `skill-bom auth login` 指引。退出清理失败不会输出成功结果。
 完整契约见[错误代码](https://github.com/coolplayagent/skill-bom-cli/blob/main/codespec/design/errors.md)。
+
+认证的 origin 默认 `https://agent.huawei.com`，不从项目 Registry 别名推断。
+Token 保存支持离线，但不验证远端有效性；其状态的过期字段为 null。
+`status --all --format json` 返回按 origin 排序的 `sessions` 数组。
+完整输入、优先级和隔离规则见[按 origin 登录](../02-user-guide/06-authentication.md)。
 
 `NETWORK_TLS` 表示证书验证或 TLS 握手/协议失败，`NETWORK_TIMEOUT` 表示超时，
 其余连接/读取失败使用 `NETWORK`。W3 与 AgentCenter 的

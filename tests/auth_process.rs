@@ -238,6 +238,18 @@ fn authentication_lock_wait_is_bounded_and_released_by_process_exit() {
     );
     assert!(start.elapsed() >= Duration::from_millis(40));
     assert!(start.elapsed() < Duration::from_secs(2));
+    // A busy W3 lock must not block an unrelated origin's token transaction.
+    let other = Sessions::for_origin(&root.join("config"), "https://registry.example").unwrap();
+    other
+        .tokens(
+            &DiskSecrets(root.join("fixture-secrets")),
+            &FakeClock::default(),
+        )
+        .login_token("separate-account", &Secret::new("separate-token".into()))
+        .unwrap();
+    other
+        .logout(&DiskSecrets(root.join("fixture-secrets")))
+        .unwrap();
     std::fs::write(root.join("release"), "").unwrap();
     join(child);
     sessions

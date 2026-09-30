@@ -36,7 +36,7 @@ pub enum Format {
 }
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Manage skill-bom's own local W3 login.
+    /// Manage skill-bom's local accounts independently for each origin.
     Auth {
         #[command(subcommand)]
         command: AuthCommand,
@@ -87,22 +87,34 @@ pub enum Command {
 }
 #[derive(Debug, Subcommand)]
 pub enum AuthCommand {
-    /// Authenticate with a W3 password and save credentials in the system keyring.
+    /// Log in to AgentCenter with W3, or save another origin's account and token.
     Login {
+        #[arg(long, default_value = crate::auth::AGENTCENTER_ORIGIN, value_name = "URL")]
+        origin: String,
         #[arg(long)]
         username: Option<String>,
-        #[arg(long)]
+        #[arg(long, conflicts_with = "token_stdin")]
         password_stdin: bool,
+        #[arg(long, conflicts_with = "password_stdin")]
+        token_stdin: bool,
     },
     /// Show local session metadata without validating or refreshing the token.
-    Status,
+    Status {
+        #[arg(long, conflicts_with = "all", value_name = "URL")]
+        origin: Option<String>,
+        #[arg(long)]
+        all: bool,
+    },
     /// Remove skill-bom's own saved password and token.
-    Logout,
+    Logout {
+        #[arg(long, default_value = crate::auth::AGENTCENTER_ORIGIN, value_name = "URL")]
+        origin: String,
+    },
 }
 
 #[path = "interfaces/auth_input.rs"]
 mod auth_input;
-pub use auth_input::{login_input, render_status};
+pub use auth_input::{login_input, render_status, render_statuses, token_input};
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum BomFrom {
     Lock,

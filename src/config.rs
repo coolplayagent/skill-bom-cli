@@ -260,6 +260,25 @@ pub fn web_url(s: &str) -> Result<String> {
     u.set_fragment(None);
     Ok(u.to_string().trim_end_matches('/').into())
 }
+/// A credential scope is an origin, never a URL path or a registry alias.
+pub fn auth_origin(value: &str) -> Result<String> {
+    if value.len() > 2048 {
+        return fail("URL", "Authentication origin exceeds 2048 bytes");
+    }
+    let canonical = web_url(value)?;
+    let url = url::Url::parse(&canonical).map_err(|_| Error::new("URL", "Invalid origin", 2))?;
+    if url.path() != "/" {
+        return fail("URL", "Authentication origin must not contain a path");
+    }
+    Ok(url.origin().ascii_serialization())
+}
+
+/// ClawHub permits a registry base path; it shares credentials with its origin.
+pub fn registry_origin(value: &str) -> Result<String> {
+    let canonical = web_url(value)?;
+    let url = url::Url::parse(&canonical).map_err(|_| Error::new("URL", "Invalid registry", 2))?;
+    Ok(url.origin().ascii_serialization())
+}
 pub fn git_url(s: &str) -> Result<String> {
     if s.starts_with("https://") {
         return Ok(web_url(s)?.trim_end_matches(".git").into());

@@ -1,4 +1,4 @@
-//! W3 credential policy. Sources consume this boundary; the resolver does not.
+//! Origin-bound credential policy. Sources consume this boundary; the resolver does not.
 mod keyring;
 mod login;
 mod session;
@@ -6,7 +6,7 @@ pub use keyring::SystemSecrets;
 pub use login::{LoginGateway, LoginResult, W3Gateway};
 pub use session::Sessions;
 
-use crate::domain::{Error, Result};
+use crate::domain::{Error, Result, auth::AuthMethod};
 use crate::{env, net};
 use std::fmt;
 use zeroize::Zeroizing;
@@ -44,6 +44,8 @@ pub struct Credential {
 }
 #[derive(Debug, Clone)]
 pub(crate) struct Stamp {
+    origin: String,
+    method: AuthMethod,
     version: u64,
     login_id: String,
 }
@@ -57,10 +59,22 @@ impl Credential {
     pub fn is_explicit(&self) -> bool {
         self.stamp.is_none()
     }
+    pub fn can_refresh(&self) -> bool {
+        self.stamp
+            .as_ref()
+            .is_some_and(|stamp| stamp.method.is_w3())
+    }
 }
 
 pub trait CredentialProvider {
     fn acquire(&self, origin: &str, explicit: Option<String>) -> Result<Credential>;
+    fn acquire_optional(
+        &self,
+        origin: &str,
+        explicit: Option<String>,
+    ) -> Result<Option<Credential>> {
+        self.acquire(origin, explicit).map(Some)
+    }
     fn refresh(&self, origin: &str, rejected: &Credential) -> Result<Credential>;
 }
 
@@ -68,6 +82,20 @@ pub fn required(message: &str) -> Error {
     Error::new("AUTH_REQUIRED", message, 2)
         .phase("authentication")
         .hint(LOGIN_HINT)
+}
+pub fn login_hint(origin: &str) -> String {
+    crate::config::auth_origin(origin).map_or_else(
+        |_| LOGIN_HINT.into(),
+        |origin| format!("Run skill-bom auth login --origin {origin} to authenticate again."),
+    )
+}
+pub fn required_for(origin: &str, message: &str) -> Error {
+    required(message).hint(&login_hint(origin))
+}
+pub fn valid_token(token: &str) -> bool {
+    !token.trim().is_empty()
+        && token.len() <= 16384
+        && token.bytes().all(|byte| (0x20..=0x7e).contains(&byte))
 }
 pub fn store_unavailable() -> Error {
     Error::new("AUTH_STORE_UNAVAILABLE", "The skill-bom credential store is unavailable", 2)
@@ -87,37 +115,48 @@ pub fn trusted_origin(origin: &str) -> bool {
             && url.fragment().is_none()
     })
 }
-fn check_origin(origin: &str) -> Result<()> {
-    if trusted_origin(origin) {
-        Ok(())
-    } else {
-        Err(Error::new("MISSING_AUTH_TOKEN", "Custom AgentCenter registries require an explicit token", 2)
-            .phase("authentication")
-            .hint("Set the token_env variable configured for this Registry. Automatic W3 credentials are restricted to https://agent.huawei.com."))
-    }
-}
-
 /// Construction is inert: no directories, keyring or login HTTP until acquisition.
 pub struct SystemProvider;
 impl CredentialProvider for SystemProvider {
     fn acquire(&self, origin: &str, explicit: Option<String>) -> Result<Credential> {
+        self.acquire_optional(origin, explicit)?.ok_or_else(|| {
+            required_for(
+                origin,
+                "No local login; configure token_env or log in to this origin",
+            )
+        })
+    }
+    fn acquire_optional(
+        &self,
+        origin: &str,
+        explicit: Option<String>,
+    ) -> Result<Option<Credential>> {
         if let Some(token) = explicit.filter(|s| !s.is_empty()) {
-            return Ok(Credential::explicit(token));
+            return Ok(Some(Credential::explicit(token)));
         }
-        check_origin(origin)?;
-        let sessions = Sessions::new(env::directories()?.config_dir())?;
+        let sessions = Sessions::for_origin(env::directories()?.config_dir(), origin)?;
+        if !sessions.status(&env::SystemClock)?.logged_in {
+            return Ok(None);
+        }
+        if sessions.method() == AuthMethod::Token {
+            return sessions
+                .tokens(&SystemSecrets, &env::SystemClock)
+                .acquire_optional(origin, None);
+        }
         let http = net::Http::new(false)?;
         let gateway = W3Gateway(&http);
         sessions
             .service(&SystemSecrets, &gateway, &env::SystemClock)
-            .acquire(origin, None)
+            .acquire_optional(origin, None)
     }
     fn refresh(&self, origin: &str, rejected: &Credential) -> Result<Credential> {
-        check_origin(origin)?;
-        if rejected.is_explicit() {
-            return Err(required("Explicit tokens are never refreshed"));
+        if !trusted_origin(origin) || !rejected.can_refresh() {
+            return Err(required_for(
+                origin,
+                "Token credentials are never refreshed",
+            ));
         }
-        let sessions = Sessions::new(env::directories()?.config_dir())?;
+        let sessions = Sessions::for_origin(env::directories()?.config_dir(), origin)?;
         let http = net::Http::new(false)?;
         let gateway = W3Gateway(&http);
         sessions
@@ -146,10 +185,13 @@ pub fn execute<T>(
             if credential.is_explicit() {
                 return Err(error.hint("Replace the explicitly configured token_env value; skill-bom auth login manages only the separate local session."));
             }
+            if !credential.can_refresh() {
+                return Err(error.hint(&login_hint(origin)));
+            }
             let refreshed = provider.refresh(origin, &credential)?;
             match operation {
                 Operation::Read => request(refreshed.token.expose()).map_err(|e| {
-                    if e.code == "AUTH_REQUIRED" { e.hint(LOGIN_HINT) } else { e }
+                    if e.code == "AUTH_REQUIRED" { e.hint(&login_hint(origin)) } else { e }
                 }),
                 Operation::Write => Err(error.hint("Credentials refreshed. The write was not replayed; check its outcome before retrying.")),
             }

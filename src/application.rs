@@ -314,19 +314,61 @@ fn install_output(scope: &config::Scope, plan: installer::Plan) -> Result<Output
     }))
 }
 fn authenticate(command: &AuthCommand, offline: bool) -> Result<Output> {
-    let sessions = auth::Sessions::new(env::directories()?.config_dir())?;
+    let directories = env::directories()?;
+    let root = directories.config_dir();
     match command {
-        AuthCommand::Status => interfaces::render_status(sessions.status(&env::SystemClock)?),
-        AuthCommand::Logout => {
+        AuthCommand::Status { origin, all } => {
+            if *all {
+                interfaces::render_statuses(auth::Sessions::all_statuses(root, &env::SystemClock)?)
+            } else {
+                let sessions = auth::Sessions::for_origin(
+                    root,
+                    origin.as_deref().unwrap_or(auth::AGENTCENTER_ORIGIN),
+                )?;
+                interfaces::render_status(sessions.status(&env::SystemClock)?)
+            }
+        }
+        AuthCommand::Logout { origin } => {
+            let sessions = auth::Sessions::for_origin(root, origin)?;
             sessions.logout(&auth::SystemSecrets)?;
-            let mut output = Output::json(serde_json::json!({"logged_out":true}))?;
-            output.text = Some("Local W3 credentials cleared.".into());
+            let mut output =
+                Output::json(serde_json::json!({"logged_out":true,"origin":sessions.origin()}))?;
+            output.text = Some(format!(
+                "Local credentials cleared for {}.",
+                sessions.origin()
+            ));
             Ok(output)
         }
         AuthCommand::Login {
+            origin,
             username,
             password_stdin,
+            token_stdin,
         } => {
+            let sessions = auth::Sessions::for_origin(root, origin)?;
+            if sessions.method() == crate::domain::auth::AuthMethod::Token {
+                if *password_stdin {
+                    return Err(Error::new(
+                        "AUTH_INPUT",
+                        "This origin uses token login; use --token-stdin",
+                        2,
+                    )
+                    .phase("authentication"));
+                }
+                let (username, token) = interfaces::token_input(username.as_deref(), *token_stdin)?;
+                let status = sessions
+                    .tokens(&auth::SystemSecrets, &env::SystemClock)
+                    .login_token(&username, &token)?;
+                return interfaces::render_status(status);
+            }
+            if *token_stdin {
+                return Err(Error::new(
+                    "AUTH_INPUT",
+                    "Official AgentCenter uses W3 login; use --password-stdin",
+                    2,
+                )
+                .phase("authentication"));
+            }
             if offline {
                 return Err(Error::new(
                     "OFFLINE_MISS",

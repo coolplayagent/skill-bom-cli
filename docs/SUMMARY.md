@@ -12,6 +12,7 @@
   - [安装、离线与事务](02-user-guide/03-installation.md)
   - [AgentCenter 与 W3 登录](02-user-guide/04-agentcenter.md)
   - [Agent Skills 格式与目录](02-user-guide/05-agent-skills.md)
+  - [按 origin 管理登录账号](02-user-guide/06-authentication.md)
 - [参考手册](03-reference/README.md)
   - [命令](03-reference/01-commands.md)
   - [文件格式](03-reference/02-file-formats.md)

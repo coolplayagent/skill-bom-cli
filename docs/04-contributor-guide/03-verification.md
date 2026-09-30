@@ -10,6 +10,11 @@ W3 认证的显式测试目标为 `auth`、`auth_protocol`、`auth_process`、`a
 Linux 凭据库失败测试使用不存在的临时 D-Bus 地址，不访问真实登录态。
 系统凭据库适配器使用官方 mock 测试；真实平台后端及 W3 在线登录需另行记录。
 
+`auth_origins` 补充多 origin 并存、独立替换/退出、Token 元数据和输入、凭据
+优先级、ClawHub 匿名与保存 Token、自定义 AgentCenter 请求和损坏状态隔离。
+CLI 测试覆盖按 origin 查询、全部账号排序和离线 Token 保存的失败诊断；
+进程测试确认 W3 锁不会阻塞另一个 origin。所有秘密都是隔离 fixtures。
+
 Issue #4 的 TLS 回归由 Rust 本地 HTTPS 服务和临时自签名证书验证：默认兼容、
 强制验证拒绝、测试专用可信根成功、认证重定向拒绝、超时分类及普通归档的
 严格验证。CLI 子进程测试环境变量的实际生效；不修改进程全局环境或系统证书库。

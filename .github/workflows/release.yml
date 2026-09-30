@@ -76,6 +76,9 @@ jobs:
           test "$count" -eq 3
           archive="dist/skill-bom-cli-skill-${GITHUB_REF_NAME}.tar.gz"
           bash scripts/package-skill.sh "$archive" skills/skill-bom-cli "${args[@]}"
+          for reference in commands configuration authentication troubleshooting; do
+            tar -tzf "$archive" | grep -Fx "skill-bom-cli/references/$reference.md" >/dev/null
+          done
           for artifact in release-artifacts/skill-bom-*; do
             key="${artifact##*/skill-bom-}"
             os="${key%-*}"

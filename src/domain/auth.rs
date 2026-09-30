@@ -10,13 +10,28 @@ pub enum ExpirySource {
     LocalPolicy,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AuthMethod {
+    #[default]
+    W3,
+    Token,
+}
+impl AuthMethod {
+    pub fn is_w3(&self) -> bool {
+        *self == Self::W3
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Session {
+    #[serde(default, skip_serializing_if = "AuthMethod::is_w3")]
+    pub method: AuthMethod,
     pub username: String,
     pub issued_at: DateTime<Utc>,
-    pub expires_at: DateTime<Utc>,
-    pub expiry_source: ExpirySource,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub expiry_source: Option<ExpirySource>,
     pub credential_ref: String,
     pub login_id: String,
 }
@@ -24,13 +39,19 @@ pub struct Session {
 impl Session {
     pub fn refresh_due(&self, now: DateTime<Utc>) -> bool {
         // A backwards clock change cannot extend the locally recorded lifetime.
-        now < self.issued_at || now >= self.issued_at + (self.expires_at - self.issued_at) / 2
+        self.method.is_w3()
+            && self.expires_at.is_some_and(|expires| {
+                now < self.issued_at || now >= self.issued_at + (expires - self.issued_at) / 2
+            })
     }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SessionState {
+    /// Absent only in the legacy official AgentCenter state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
     pub version: u64,
     pub session: Option<Session>,
     /// References awaiting deletion, including interrupted credential publications.
@@ -39,11 +60,13 @@ pub struct SessionState {
 
 #[derive(Debug, Serialize)]
 pub struct AuthStatus {
+    pub origin: String,
+    pub method: AuthMethod,
     pub logged_in: bool,
     pub username: Option<String>,
     pub expires_at: Option<DateTime<Utc>>,
     pub expiry_source: Option<ExpirySource>,
-    pub expired: bool,
+    pub expired: Option<bool>,
     pub cleanup_pending: bool,
 }
 
