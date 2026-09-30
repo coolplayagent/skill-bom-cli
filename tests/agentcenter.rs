@@ -221,7 +221,7 @@ fn cli_lock_install_verify_and_export_bom() {
     let requests = server.requests.load(Ordering::SeqCst);
     run(&["install", "--frozen", "--format", "json"]);
     assert_eq!(server.requests.load(Ordering::SeqCst), requests);
-    assert!(temp.path().join("skills/review/SKILL.md").is_file());
+    assert!(temp.path().join(".agents/skills/review/SKILL.md").is_file());
     assert_eq!(run(&["verify", "--format", "json"])["lock_differs"], false);
     let bom = run(&["bom", "--format", "json"]);
     assert_eq!(bom["view"], "lock");
@@ -282,7 +282,10 @@ fn latest_mismatch_auth_failures_and_redirects_are_explicit() {
 #[test]
 fn explicit_subdir_and_business_envelope_are_checked() {
     let bytes = common::zip(&[
-        ("wrapper/SKILL.md", b"---\nname: review\n---\n"),
+        (
+            "wrapper/SKILL.md",
+            b"---\nname: review\ndescription: Test skill\n---\n",
+        ),
         (
             "wrapper/skill.toml",
             common::metadata("review", "1.0.0", "").as_bytes(),

@@ -10,4 +10,9 @@ AgentCenter 的锁定来源使用 Registry URL、稳定 `skillId` 和显式 `sub
 
 目标内 `.skill-bom/` 记录所有权、已部署包和事务状态。它是本机事实，不应当代替提交到仓库的锁文件。BOM 是显式导出物，也不隐式修改声明或锁。未知主版本的锁不会被自动降级。
 
+`[install].agent` 接受 universal、codex、claude-code、cursor、relayagent，
+与 `target` 互斥。未设置 agent 的既有声明保持原摘要序列化形状。
+Skill 内容另须通过 [Agent Skills 校验](../02-user-guide/05-agent-skills.md)；
+标准入口是 Agent 名称和描述的来源，依赖声明仍由 `skill.toml` 或精确来源补充提供。
+
 [上一篇：命令](01-commands.md) · [下一篇：BOM](03-bom.md)

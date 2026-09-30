@@ -347,7 +347,13 @@ fn lfs_symlink_and_subdirectory_acquisition_fail_closed() {
             "UNSAFE_PATH"
         );
     }
-    let bytes = tar(&[("root/SKILL.md", b"---\nname: sub\n---\nhello")], true);
+    let bytes = tar(
+        &[(
+            "root/SKILL.md",
+            b"---\nname: sub\ndescription: Test skill\n---\nhello",
+        )],
+        true,
+    );
     let hash = digest(&bytes);
     let server = Server::new(move |_, _| Reply::bytes("application/gzip", bytes.clone()));
     let m = manifest();
@@ -397,7 +403,11 @@ fn git_provider_locks_exact_content_and_rejects_gitlinks() {
     let repo = tempfile::tempdir().unwrap();
     let path = repo.path();
     skill_bom::process::git(Some(path), &["init", "--quiet"]).unwrap();
-    std::fs::write(path.join("SKILL.md"), "---\nname: example\n---\nhello").unwrap();
+    std::fs::write(
+        path.join("SKILL.md"),
+        "---\nname: example\ndescription: Test skill\n---\nhello",
+    )
+    .unwrap();
     std::fs::write(path.join("skill.toml"), metadata("example", "1.0.0", "")).unwrap();
     skill_bom::process::git(Some(path), &["add", "."]).unwrap();
     skill_bom::process::git(

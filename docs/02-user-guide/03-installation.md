@@ -1,6 +1,6 @@
 # 安装、离线与漂移
 
-项目与用户全局作用域独立。项目默认把 Skill 复制到声明旁的 `skills/`；`--global` 选用用户标准配置、缓存和数据目录。`--target PATH` 覆盖本次目标，但一个目标只能由一个环境管理。不要让另一个 Agent 同时读取正在替换的多个 Skill 目录。
+项目与用户全局作用域独立。项目默认把 Skill 复制到声明旁的 `.agents/skills/`，全局默认使用 `~/.agents/skills/`；声明、锁与缓存保存在 skill-bom 自身目录。`--agent` 选择客户端预设，`--target PATH` 选择自定义目录，二者互斥。完整路径及迁移规则见 [Agent Skills 兼容](05-agent-skills.md)。一个目标只能由一个环境管理。不要让另一个 Agent 同时读取正在替换的多个 Skill 目录。
 
 ```sh
 skill-bom install --locked

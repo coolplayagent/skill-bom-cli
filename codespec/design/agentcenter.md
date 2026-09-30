@@ -81,4 +81,4 @@ other sources. `net` owns GET/POST transport and auth-header confinement;
 `sources/agentcenter.rs` owns protocol, identity and ZIP acquisition;
 `store` and `installer` retain content verification and transaction ownership.
 This is a Registry source, not an Agent-specific installation adapter. The
-[requirements](../requirements/skill-bom-cli.md) exclude Agent search-path logic.
+[Agent discovery presets](agent-skills.md) are selected independently of this source.

@@ -65,7 +65,7 @@ fn complete_cli_archive_workflow_and_spdx_schema() {
         json(run(root, &["lock", "--format", "json"]), 0)["packages"],
         1
     );
-    assert!(!root.join("skills").exists());
+    assert!(!root.join(".agents/skills").exists());
     let lock_bytes = std::fs::read(root.join("skills.lock")).unwrap();
     let plan = json(
         run(
@@ -75,9 +75,9 @@ fn complete_cli_archive_workflow_and_spdx_schema() {
         0,
     );
     assert_eq!(plan["changes"][0]["action"], "add");
-    assert!(!root.join("skills").exists());
+    assert!(!root.join(".agents/skills").exists());
     json(run(root, &["install", "--locked", "--format", "json"]), 0);
-    assert!(root.join("skills/example/SKILL.md").exists());
+    assert!(root.join(".agents/skills/example/SKILL.md").exists());
     assert_eq!(std::fs::read(root.join("skills.lock")).unwrap(), lock_bytes);
     json(run(root, &["install", "--frozen", "--format", "json"]), 0);
     let tree = run(root, &["tree"]);
@@ -113,7 +113,7 @@ fn complete_cli_archive_workflow_and_spdx_schema() {
     let validator = jsonschema::JSONSchema::compile(&schema).unwrap();
     assert!(validator.is_valid(&spdx), "{spdx}");
     skill_bom::bom::validate_references(&spdx).unwrap();
-    std::fs::write(root.join("skills/example/SKILL.md"), "local edit").unwrap();
+    std::fs::write(root.join(".agents/skills/example/SKILL.md"), "local edit").unwrap();
     json(run(root, &["verify", "--format", "json"]), 1);
     let drift = json(
         run(root, &["bom", "--from", "installed", "--format", "json"]),
@@ -197,7 +197,10 @@ fn init_update_scope_flags_errors_and_schema_exports() {
 fn locked_offline_missing_cache_and_strict_legacy_metadata() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
-    let archive = zip(&[("SKILL.md", b"---\nname: legacy\n---\noriginal")]);
+    let archive = zip(&[(
+        "SKILL.md",
+        b"---\nname: legacy\ndescription: Test skill\n---\noriginal",
+    )]);
     let hash = digest(&archive);
     let server = Server::new(move |_, _| Reply::bytes("application/zip", archive.clone()));
     write_manifest(root, &format!("{}/legacy.zip", server.url), &hash);
@@ -341,7 +344,7 @@ fn sync_resolves_previews_upgrades_and_preserves_lock_on_conflict() {
             zip(&[
                 (
                     "SKILL.md",
-                    format!("---\nname: {id}\n---\n{body}\n").as_bytes(),
+                    format!("---\nname: {id}\ndescription: Test skill\n---\n{body}\n").as_bytes(),
                 ),
                 ("skill.toml", metadata(id, selected, deps).as_bytes()),
             ]),
@@ -353,14 +356,14 @@ fn sync_resolves_previews_upgrades_and_preserves_lock_on_conflict() {
     let preview = json(run(root, &["sync", "--dry-run", "--format", "json"]), 0);
     assert_eq!(preview["packages"], 3);
     assert!(!root.join("skills.lock").exists());
-    assert!(!root.join("skills").exists());
+    assert!(!root.join(".agents/skills").exists());
     let first = json(run(root, &["sync", "--format", "json"]), 0);
     assert_eq!(first["changes"].as_array().unwrap().len(), 3);
     assert_eq!(
         json(run(root, &["verify", "--format", "json"]), 0)["lock_differs"],
         false
     );
-    assert!(root.join("skills/child/SKILL.md").exists());
+    assert!(root.join(".agents/skills/child/SKILL.md").exists());
     let first_lock = std::fs::read(root.join("skills.lock")).unwrap();
     assert!(
         json(run(root, &["sync", "--format", "json"]), 0)["changes"]
@@ -377,12 +380,12 @@ fn sync_resolves_previews_upgrades_and_preserves_lock_on_conflict() {
     assert_eq!(std::fs::read(root.join("skills.lock")).unwrap(), first_lock);
     json(run(root, &["sync", "review", "--format", "json"]), 0);
     assert!(
-        std::fs::read_to_string(root.join("skills/review/SKILL.md"))
+        std::fs::read_to_string(root.join(".agents/skills/review/SKILL.md"))
             .unwrap()
             .contains("1.1.0")
     );
     assert!(
-        std::fs::read_to_string(root.join("skills/child/SKILL.md"))
+        std::fs::read_to_string(root.join(".agents/skills/child/SKILL.md"))
             .unwrap()
             .contains("1.0.0")
     );
@@ -420,7 +423,11 @@ fn sync_resolves_previews_upgrades_and_preserves_lock_on_conflict() {
         before_mismatch
     );
     changed_content.store(false, Ordering::SeqCst);
-    std::fs::write(root.join("skills/review/SKILL.md"), "local modification").unwrap();
+    std::fs::write(
+        root.join(".agents/skills/review/SKILL.md"),
+        "local modification",
+    )
+    .unwrap();
     let before_conflict = std::fs::read(root.join("skills.lock")).unwrap();
     let conflict = json(run(root, &["sync", "--dry-run", "--format", "json"]), 1);
     assert!(!conflict["conflicts"].as_array().unwrap().is_empty());
@@ -430,7 +437,7 @@ fn sync_resolves_previews_upgrades_and_preserves_lock_on_conflict() {
         before_conflict
     );
     assert_eq!(
-        std::fs::read_to_string(root.join("skills/review/SKILL.md")).unwrap(),
+        std::fs::read_to_string(root.join(".agents/skills/review/SKILL.md")).unwrap(),
         "local modification"
     );
 }

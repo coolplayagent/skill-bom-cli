@@ -25,6 +25,14 @@ it does not predeclare passing results. Actual runs are recorded separately in
 | R16 | cli: sync first install, repeat, preview, offline and unknown alias, upgrade, verified deployment and lock/installation agreement, source failure, content mismatch and installation conflict/local modification preservation |
 | R17 | auth: lifecycle, rejected login preservation, storage faults, journals, namespace isolation, explicit overrides, read/write replay and logout fencing; auth_protocol: W3 token/expiry fixtures, AgentCenter refresh, trusted origin, cache/offline zero calls and HTTP auth signals; auth_process: cross-process refresh merging, logout fencing, bounded lock waiting and process interruption after each secret write; auth_cli: manifest-independent commands, local status, stdin constraints, redaction, unavailable isolated Linux bus; domain/net/interfaces/keyring unit tests: pure expiry including clock overflow, exact secureLogin wire headers/body, redirects, input and official mock backend error mapping |
 | R18 | env unit tests: absent/true/false aliases, malformed/empty/non-Unicode values and redaction; net TLS unit tests: self-signed W3/detail/download acceptance, strict rejection without retries, trusted-root success, unchanged ordinary GET verification, redirects/offline, real timeouts and typed sanitized errors; agentcenter CLI: environment-controlled HTTPS detail/ZIP acquisition, invalid settings, strict rejection and archive isolation; auth_cli: invalid TLS setting before network/storage; auth_protocol: transport diagnostics survive login |
+| R19 | skills: YAML multiline/quotes/CRLF, strict field types and limits, extensions and inert interpolation, tags/duplicates/resource exhaustion, exact entrypoint, metadata name agreement, old cache rejection and historical upgrade; domain unit tests: Unicode/NFKC names and portable paths; agents: standard-only archive, frozen cache validation, unchanged resources and failure before lock/target mutation |
+| R20 | agents: every preset in isolated project/user scope, RelayAgent .skills versus ~/.relay/skills, init persistence, CLI/manifest/custom-path precedence, conflicts, legacy-target preservation, unchanged legacy manifest digest and Claude reserved names; domain unit tests: pure preset paths; quality: exported Schema, bundled Skill validation and test registration |
+
+Agent discovery tests read installed metadata/resources from the documented
+directories in temporary environments. They never invoke an Agent or execute
+Skill content. RelayAgent paths are a user-confirmed contract. These tests are
+not live evidence for Codex, Claude Code, Cursor or RelayAgent. Executed host
+platforms and any future real-client smoke runs must be recorded separately.
 
 The AgentCenter fixture is derived from Issue #2's reported contract. Internal
 RelayAgent source, a versioned API Schema and live service credentials were not

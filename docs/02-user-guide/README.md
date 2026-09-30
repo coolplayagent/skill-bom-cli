@@ -4,6 +4,7 @@
 2. [版本解析与更新](02-resolution.md)
 3. [安装、离线与漂移](03-installation.md)
 4. [接入 AgentCenter Registry](04-agentcenter.md)
+5. [Agent Skills 格式与安装目录](05-agent-skills.md)
 
 本篇关注日常操作。命令参数和文件字段的完整表见[参考手册](../03-reference/README.md)。
 

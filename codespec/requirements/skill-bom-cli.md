@@ -4,7 +4,8 @@ This document implements the intent of
 [Issue 1](https://github.com/coolplayagent/skill-bom-cli/issues/1).
 The normative scope is Skill acquisition, dependency resolution, independent
 project/global installation, verification and BOM export. Runtime tool installation,
-MCP configuration, registry publishing and Agent-specific adapters are excluded.
+MCP configuration, registry publishing and Agent runtime integration are excluded.
+Agent discovery-directory presets and standard Skill validation are included.
 See [design](../design/skill-bom-cli.md), [AgentCenter extension](../design/agentcenter.md)
 and [test evidence](../test/skill-bom-cli.md).
 
@@ -28,10 +29,12 @@ and [test evidence](../test/skill-bom-cli.md).
 | R16 | `sync [alias]` upgrades using update's root selection, verifies all resolved content before deployment, and writes the lock only after successful installation. Preview reports changes and conflicts without changing lock or target; offline sync fails explicitly. A post-deployment lock-write failure reports the reconciliation command. |
 | R17 | W3 auth login/status/logout work before manifest loading with text/JSON output. Hidden interactive or bounded stdin passwords, fixed HTTPS secureLogin, official OS credential stores, isolated single-account state, explicit-token precedence, trusted-origin confinement, declared expiry/default four-hour half-life policy, one refresh/replay per rejected read, bounded cross-process lock and logout tombstones. Validation, cache hits and offline operations never acquire credentials. Failures redact secrets and never claim successful cleanup. See [W3 design](../design/w3-auth.md). |
 | R18 | Issue #4: AGENTCENTER_VERIFY_TLS defaults to false for W3 login/refresh and AgentCenter detail/download; explicit true enforces certificate/hostname verification without downgrade. Parse booleans strictly; other sources retain verification, fixed destinations and redirect rules remain intact. Report sanitized TLS, timeout and other network failures distinctly. Document internal-chain risks and verify with isolated HTTPS fixtures. |
+| R19 | Require exact SKILL.md and bounded data-only YAML parsing for Agent Skills standard fields, Unicode/NFKC portable names, required description and name/directory agreement. Preserve client extensions and all resource bytes. Check fresh, cached, locked and offline deployment; structured metadata and supplements cannot bypass format or rename skills. Historical records remain auditable and unchanged legacy content can be upgraded. |
+| R20 | Support universal, codex, claude-code, cursor and relayagent through --agent and install.agent. Select one target with CLI-over-manifest precedence and same-layer target/agent exclusion. Default to project/user .agents/skills; RelayAgent uses project .skills and user ~/.relay/skills. Persist init selection, retain explicit old targets without migration, isolate Agent home under SKILL_BOM_HOME, report resolved targets and distinguish filesystem contracts from real client evidence. |
 
 Required CLI commands are init, validate, lock, update [alias], sync [alias], install, tree,
 why, list, verify, bom and auth login/status/logout. Install supports locked/frozen/dry-run; common options
-select manifest, global scope, target, offline access, JSON output and strict
+select manifest, global scope, Agent preset or target, offline access, JSON output and strict
 metadata. `schema` additionally exports implementation-generated JSON Schemas.
 
 Exit 1 denotes a definite conflict, content mismatch or drift; exit 2 denotes

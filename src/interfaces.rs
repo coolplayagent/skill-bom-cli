@@ -14,8 +14,11 @@ pub struct Cli {
     pub manifest: Option<PathBuf>,
     #[arg(long, global = true)]
     pub global: bool,
-    #[arg(long, global = true, value_name = "PATH")]
+    #[arg(long, global = true, value_name = "PATH", conflicts_with = "agent")]
     pub target: Option<PathBuf>,
+    /// Select an Agent discovery directory; defaults to the shared universal preset.
+    #[arg(long, global = true, value_parser = ["universal", "codex", "claude-code", "cursor", "relayagent"])]
+    pub agent: Option<String>,
     #[arg(long, global = true)]
     pub offline: bool,
     #[arg(long, global = true)]

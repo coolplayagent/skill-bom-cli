@@ -168,7 +168,7 @@ fn metadata_unknown_supplements_and_version_checks() {
     let mut supplemented = m.clone();
     supplemented.package_metadata.push(Supplement {
         source: dep("a", "=1.0.0"),
-        name: "supplemented".into(),
+        name: "example".into(),
         complete: true,
         dependencies: BTreeMap::new(),
     });

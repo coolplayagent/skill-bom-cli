@@ -95,9 +95,9 @@ fn panic_simulates_crash_and_next_writer_recovers() {
         let tmp = tempfile::tempdir().unwrap();
         let cache = Store::new(tmp.path().join("cache"));
         let target = tmp.path().join("target");
-        let first = lock(vec![package(&cache, "example", "1.0.0")]);
+        let first = lock(vec![package(&cache, "代码审查", "1.0.0")]);
         let next = lock(vec![
-            package(&cache, "example", "1.1.0"),
+            package(&cache, "代码审查", "1.1.0"),
             package(&cache, "new", "1.0.0"),
         ]);
         let guard = installer::acquire(&target, "owner").unwrap();

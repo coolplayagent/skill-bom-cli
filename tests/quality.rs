@@ -193,7 +193,7 @@ fn docs_examples_and_build_contracts_agree() {
     let _: PackageManifest = toml::from_str(include_str!("../examples/skill.toml")).unwrap();
     let requirements = include_str!("../codespec/requirements/skill-bom-cli.md");
     let tests = include_str!("../codespec/test/skill-bom-cli.md");
-    for id in 1..=18 {
+    for id in 1..=20 {
         assert!(requirements.contains(&format!("R{id:02}")));
         assert!(tests.contains(&format!("R{id:02}")));
     }
@@ -219,6 +219,8 @@ fn docs_examples_and_build_contracts_agree() {
         "auth_protocol",
         "auth_process",
         "auth_cli",
+        "agents",
+        "skills",
         "transactions",
         "cli",
         "quality",
@@ -334,6 +336,8 @@ fn book_is_navigable_and_skill_matches_release() {
         );
     }
     let skill = std::fs::read_to_string(root.join("skills/skill-bom-cli/SKILL.md")).unwrap();
+    let frontmatter = skill_bom::config::skill::parse(skill.as_bytes()).unwrap();
+    frontmatter.matches_directory("skill-bom-cli").unwrap();
     let package: PackageManifest = toml::from_str(
         &std::fs::read_to_string(root.join("skills/skill-bom-cli/skill.toml")).unwrap(),
     )

@@ -1,6 +1,55 @@
 use super::*;
 
 #[test]
+fn agent_skills_names_are_unicode_portable_and_canonical() {
+    for name in ["review", "代码审查", "étude", "a-1", "４２"] {
+        assert!(skill_name(name).is_ok(), "{name}");
+    }
+    assert_eq!(skill_name(" e\u{301}tude ").unwrap(), "étude");
+    assert_eq!(skill_name("４２").unwrap(), "42");
+    for name in [
+        "", "Review", "foo_bar", "a.b", "a--b", "-a", "a-", "a/b", "CON", "nul",
+    ] {
+        assert!(skill_name(name).is_err(), "{name}");
+    }
+    assert!(skill_name(&"文".repeat(64)).is_ok());
+    assert!(skill_name(&"文".repeat(65)).is_err());
+    assert_eq!(directory_key("ＥXAMPLE"), "example");
+}
+
+#[test]
+fn agent_presets_have_explicit_project_and_user_contracts() {
+    for (name, agent, project, global) in [
+        (
+            "universal",
+            Agent::Universal,
+            ".agents/skills",
+            ".agents/skills",
+        ),
+        ("codex", Agent::Codex, ".agents/skills", ".agents/skills"),
+        (
+            "claude-code",
+            Agent::ClaudeCode,
+            ".claude/skills",
+            ".claude/skills",
+        ),
+        ("cursor", Agent::Cursor, ".cursor/skills", ".cursor/skills"),
+        ("relayagent", Agent::Relayagent, ".skills", ".relay/skills"),
+    ] {
+        assert_eq!(name.parse::<Agent>().unwrap(), agent);
+        assert_eq!(agent.as_str(), name);
+        assert_eq!(agent.directory(false), project);
+        assert_eq!(agent.directory(true), global);
+        agent.validate_name("review").unwrap();
+    }
+    assert!("unknown".parse::<Agent>().is_err());
+    for name in ["synced", "anthropic-skills"] {
+        assert!(Agent::ClaudeCode.validate_name(name).is_err());
+        Agent::Universal.validate_name(name).unwrap();
+    }
+}
+
+#[test]
 fn auth_expiry_and_refresh_are_pure() {
     use auth::{ExpirySource, Session, expiry};
     let now = chrono::DateTime::from_timestamp(1_790_640_000, 0).unwrap();

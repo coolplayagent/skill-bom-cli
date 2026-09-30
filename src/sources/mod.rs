@@ -43,7 +43,7 @@ impl<'a> Provider<'a> {
         })
     }
     pub fn ensure(&mut self, p: &LockedPackage) -> Result<std::path::PathBuf> {
-        match self.store.get(p) {
+        let root = match self.store.get(p) {
             Ok(path) => Ok(path),
             Err(e) if self.http.offline => Err(e),
             Err(_) => {
@@ -60,7 +60,9 @@ impl<'a> Provider<'a> {
                 }
                 self.store.get(p)
             }
-        }
+        }?;
+        store::validate_skill(&root, p)?;
+        Ok(root)
     }
 }
 impl SourceProvider for Provider<'_> {
@@ -198,7 +200,7 @@ pub fn metadata(
     root: &Path,
     strict: bool,
 ) -> Result<Metadata> {
-    let entry = store::entrypoint(root)?;
+    let skill = store::skill(root)?;
     let path = root.join("skill.toml");
     let supplements: Vec<_> = manifest
         .package_metadata
@@ -223,9 +225,10 @@ pub fn metadata(
             .map_err(|_| Error::new("METADATA", "skill.toml is not UTF-8", 2))?;
         let m: PackageManifest =
             toml::from_str(text).map_err(|e| Error::new("METADATA", e.to_string(), 2))?;
-        if m.schema_version != SCHEMA || !safe_name(&m.package.name) {
+        if m.schema_version != SCHEMA {
             return fail("METADATA", "Invalid package schema or name");
         }
+        skill.matches_directory(&skill_name(&m.package.name)?)?;
         semver::Version::parse(&m.package.version)
             .map_err(|_| Error::new("METADATA", "Package version is not SemVer", 1))?;
         if candidate
@@ -240,19 +243,20 @@ pub fn metadata(
         }
         manifest.validate_deps(&m.dependencies)?;
         Metadata {
-            name: m.package.name,
-            license: m.package.license,
-            description: m.package.description,
+            name: skill.name.clone(),
+            license: m.package.license.or_else(|| skill.license.clone()),
+            description: Some(skill.description.clone()),
             dependency_metadata: MetadataKind::Upstream,
             metadata_digest: Some(digest(&bytes)),
             dependencies: m.dependencies,
             diagnostics: vec![],
         }
     } else if let Some(s) = supplements.first() {
+        skill.matches_directory(&skill_name(&s.name)?)?;
         Metadata {
-            name: s.name.clone(),
-            license: None,
-            description: None,
+            name: skill.name.clone(),
+            license: skill.license.clone(),
+            description: Some(skill.description.clone()),
             dependency_metadata: if s.complete {
                 MetadataKind::UserComplete
             } else {
@@ -265,22 +269,10 @@ pub fn metadata(
             ],
         }
     } else {
-        let text = String::from_utf8(paths::read(&entry, 1024 * 1024)?)
-            .map_err(|_| Error::new("METADATA", "Skill entrypoint must be UTF-8", 1))?;
-        let name = frontmatter(&text, "name").ok_or_else(|| {
-            Error::new(
-                "METADATA",
-                "Legacy Skill requires a frontmatter name or package_metadata supplement",
-                1,
-            )
-        })?;
-        if !safe_name(&name) {
-            return fail("METADATA", "Invalid Skill name");
-        }
         Metadata {
-            name,
-            license: None,
-            description: frontmatter(&text, "description"),
+            name: skill.name.clone(),
+            license: skill.license.clone(),
+            description: Some(skill.description.clone()),
             dependency_metadata: MetadataKind::Unknown,
             metadata_digest: None,
             dependencies: BTreeMap::new(),
@@ -289,13 +281,14 @@ pub fn metadata(
             ],
         }
     };
-    let text = String::from_utf8(paths::read(&entry, 1024 * 1024)?)
-        .map_err(|_| Error::new("METADATA", "Skill entrypoint must be UTF-8", 1))?;
-    if let Some(v) = frontmatter(&text, "version")
+    if let Some(v) = skill
+        .extensions
+        .get("version")
+        .and_then(serde_json::Value::as_str)
         && candidate
             .version
             .as_ref()
-            .is_some_and(|selected| *selected != v)
+            .is_some_and(|selected| selected != v)
     {
         meta.diagnostics.push(format!(
             "SKILL.md auxiliary version {v} differs from selected release"
@@ -308,19 +301,4 @@ pub fn metadata(
         );
     }
     Ok(meta)
-}
-fn frontmatter(text: &str, key: &str) -> Option<String> {
-    let mut lines = text.lines();
-    if lines.next()? != "---" {
-        return None;
-    }
-    for line in lines {
-        if line == "---" {
-            break;
-        }
-        if let Some(value) = line.strip_prefix(&format!("{key}:")) {
-            return Some(value.trim().trim_matches(['\"', '\'']).to_string());
-        }
-    }
-    None
 }
