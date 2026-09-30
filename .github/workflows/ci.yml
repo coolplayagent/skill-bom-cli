@@ -16,7 +16,7 @@ jobs:
       - run: cargo check --locked --all-targets --all-features
       - run: cargo clippy --locked --all-targets --all-features -- -D warnings
       - run: cargo test --locked --lib --bins --all-features
-      - run: cargo test --locked --test config --test resolver --test sources --test protocol --test agentcenter --test auth --test auth_protocol --test auth_process --test auth_cli --test transactions --test cli --test quality --all-features -- --test-threads=1
+      - run: cargo test --locked --test config --test resolver --test sources --test protocol --test agentcenter --test auth --test auth_protocol --test auth_process --test auth_cli --test agents --test skills --test transactions --test cli --test quality --all-features -- --test-threads=1
   bazel:
     runs-on: ubuntu-latest
     steps:

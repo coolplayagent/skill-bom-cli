@@ -2,6 +2,16 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "additionalProperties": false,
   "definitions": {
+    "Agent": {
+      "enum": [
+        "universal",
+        "codex",
+        "claude-code",
+        "cursor",
+        "relayagent"
+      ],
+      "type": "string"
+    },
     "Dependency": {
       "additionalProperties": false,
       "properties": {
@@ -71,6 +81,16 @@
     "Install": {
       "additionalProperties": false,
       "properties": {
+        "agent": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Agent"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "target": {
           "type": [
             "string",

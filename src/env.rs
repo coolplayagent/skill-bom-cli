@@ -66,6 +66,24 @@ pub fn directories() -> Result<UserDirs> {
         .ok_or_else(|| Error::new("USER_DIRECTORY", "Cannot determine user directories", 2))
 }
 
+/// Agent discovery roots are isolated by the same override as all other state.
+pub fn agent_home() -> Result<PathBuf> {
+    if let Some(root) = variable("SKILL_BOM_HOME") {
+        let root = PathBuf::from(root);
+        if !root.is_absolute() {
+            return Err(Error::new(
+                "USER_DIRECTORY",
+                "SKILL_BOM_HOME must be absolute",
+                2,
+            ));
+        }
+        return Ok(root.join("home"));
+    }
+    directories::BaseDirs::new()
+        .map(|dirs| dirs.home_dir().to_path_buf())
+        .ok_or_else(|| Error::new("USER_DIRECTORY", "Cannot determine user home", 2))
+}
+
 pub fn now() -> String {
     chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
 }

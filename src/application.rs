@@ -19,7 +19,13 @@ pub fn run(cli: &Cli) -> Result<Output> {
     if let Command::Auth { command } = &cli.command {
         return authenticate(command, cli.offline);
     }
-    let mut scope = config::Scope::new(cli.manifest.as_deref(), cli.global, cli.target.as_deref())?;
+    let agent = cli.agent.as_deref().map(str::parse).transpose()?;
+    let mut scope = config::Scope::with_agent(
+        cli.manifest.as_deref(),
+        cli.global,
+        cli.target.as_deref(),
+        agent,
+    )?;
     if matches!(cli.command, Command::Init) {
         paths::no_symlink(&scope.manifest)?;
         std::fs::create_dir_all(scope.manifest.parent().unwrap())?;
@@ -41,15 +47,36 @@ pub fn run(cli: &Cli) -> Result<Output> {
         file.write_all(
             b"schema_version = 1\n\n[project]\nname = \"my-project\"\n\n[dependencies]\n",
         )?;
+        if let Some(agent) = agent {
+            writeln!(file, "\n[install]\nagent = {:?}", agent.as_str())?;
+        } else if cli.target.is_some() {
+            let install = config::Install {
+                target: Some(scope.target.to_string_lossy().into_owned()),
+                agent: None,
+            };
+            let text =
+                toml::to_string(&install).map_err(|e| Error::new("CONFIG", e.to_string(), 2))?;
+            write!(file, "\n[install]\n{text}")?;
+        }
         file.sync_all()?;
         return Output::json(serde_json::json!({"created":scope.manifest}));
     }
     let manifest = scope.load(cli.target.is_some())?;
+    if scope.agent.is_some()
+        && scope.target != scope.legacy_target
+        && installer::read(&scope.legacy_target, &scope.owner).is_ok_and(|s| s.is_some())
+    {
+        eprintln!(
+            "Legacy installation remains at {}. Use --target with that path to manage it explicitly.",
+            scope.legacy_target.display()
+        );
+    }
     eprintln!(
-        "manifest: {}\nlock: {}\ntarget: {}",
+        "manifest: {}\nlock: {}\ntarget: {}\nagent: {}",
         scope.manifest.display(),
         scope.lock.display(),
-        scope.target.display()
+        scope.target.display(),
+        scope.agent.map_or("custom", Agent::as_str)
     );
     match &cli.command {
         Command::Validate => {
@@ -89,6 +116,7 @@ pub fn run(cli: &Cli) -> Result<Output> {
             )?;
             let lock = resolver::Resolver::new(&manifest, &mut provider, old.as_ref(), update)
                 .resolve()?;
+            validate_agent(&scope, &lock)?;
             if let Command::Sync { dry_run, .. } = &cli.command {
                 if cli.strict_metadata {
                     strict(&lock)?;
@@ -111,7 +139,8 @@ pub fn run(cli: &Cli) -> Result<Output> {
                 let failed = !plan.conflicts.is_empty();
                 let mut out = Output::json(serde_json::json!({
                     "lock":scope.lock,"packages":lock.packages.len(),"digest":json_digest(&lock)?,
-                    "changes":plan.changes,"conflicts":plan.conflicts
+                    "changes":plan.changes,"conflicts":plan.conflicts,
+                    "agent":scope.agent,"target":scope.target
                 }))?;
                 out.exit_code = u8::from(failed);
                 Ok(out)
@@ -158,6 +187,7 @@ pub fn run(cli: &Cli) -> Result<Output> {
             if cli.strict_metadata {
                 strict(&lock)?;
             }
+            validate_agent(&scope, &lock)?;
             for p in lock.packages.values() {
                 provider.ensure(p)?;
             }
@@ -165,7 +195,7 @@ pub fn run(cli: &Cli) -> Result<Output> {
             if *dry_run {
                 let plan = installer::plan(&scope.target, &scope.owner, &lock)?;
                 let failed = !plan.conflicts.is_empty();
-                let mut out = Output::json(plan)?;
+                let mut out = install_output(&scope, plan)?;
                 out.exit_code = u8::from(failed);
                 return Ok(out);
             }
@@ -175,16 +205,18 @@ pub fn run(cli: &Cli) -> Result<Output> {
             let guard = installer::acquire(&scope.target, &scope.owner)?;
             let plan =
                 installer::deploy(&scope.target, &scope.owner, &lock, &provider.store, &guard)?;
-            Output::json(plan)
+            install_output(&scope, plan)
         }
         Command::List => {
             let state = installer::read(&scope.target, &scope.owner)?;
-            Output::json(serde_json::json!({"installed":state,"target":scope.target}))
+            Output::json(
+                serde_json::json!({"installed":state,"target":scope.target,"agent":scope.agent}),
+            )
         }
         Command::Verify => {
             let lock = config::read_lock(&scope.lock)?;
             let state = installed(&scope)?;
-            let status = installer::verify(&scope.target, &state, &lock)?;
+            let status = installer::verify_for_agent(&scope.target, &state, &lock, scope.agent)?;
             let code = u8::from(!status.clean());
             let mut out = Output::json(status)?;
             out.exit_code = code;
@@ -237,7 +269,8 @@ pub fn run(cli: &Cli) -> Result<Output> {
                 BomFrom::Lock => (current, None),
                 BomFrom::Installed => {
                     let state = installed(&scope)?;
-                    let status = installer::verify(&scope.target, &state, &current)?;
+                    let status =
+                        installer::verify_for_agent(&scope.target, &state, &current, scope.agent)?;
                     (state.lock, Some(status))
                 }
             };
@@ -263,6 +296,22 @@ pub fn run(cli: &Cli) -> Result<Output> {
             unreachable!("handled before manifest loading")
         }
     }
+}
+fn validate_agent(scope: &config::Scope, lock: &Lock) -> Result<()> {
+    if let Some(agent) = scope.agent {
+        for package in lock.packages.values() {
+            agent
+                .validate_name(&package.directory)
+                .map_err(|e| e.package(&package.source.id()))?;
+        }
+    }
+    Ok(())
+}
+fn install_output(scope: &config::Scope, plan: installer::Plan) -> Result<Output> {
+    Output::json(serde_json::json!({
+        "changes":plan.changes,"conflicts":plan.conflicts,
+        "target":scope.target,"agent":scope.agent
+    }))
 }
 fn authenticate(command: &AuthCommand, offline: bool) -> Result<Output> {
     let sessions = auth::Sessions::new(env::directories()?.config_dir())?;

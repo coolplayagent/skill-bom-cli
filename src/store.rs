@@ -1,6 +1,6 @@
 //! Immutable content-addressed trees. Every read revalidates the content boundary.
 use crate::domain::*;
-use crate::paths;
+use crate::{config, paths};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -110,7 +110,7 @@ fn register_path(names: &mut BTreeMap<String, String>, path: &str) -> Result<()>
             prefix.push('/');
         }
         prefix.push_str(part);
-        if let Some(old) = names.insert(prefix.to_lowercase(), prefix.clone())
+        if let Some(old) = names.insert(directory_key(&prefix), prefix.clone())
             && old != prefix
         {
             return fail("CASE_COLLISION", format!("{old} and {prefix}"));
@@ -119,16 +119,28 @@ fn register_path(names: &mut BTreeMap<String, String>, path: &str) -> Result<()>
     Ok(())
 }
 pub fn entrypoint(root: &Path) -> Result<PathBuf> {
-    let names = ["SKILL.md", "skill.md", "skills.md"];
-    let entries = std::fs::read_dir(root)?.collect::<std::io::Result<Vec<_>>>()?;
-    let found: Vec<_> = entries
-        .into_iter()
-        .filter(|entry| names.iter().any(|name| entry.file_name() == *name))
-        .collect();
-    if found.len() != 1 {
+    let mut found = Vec::new();
+    for (count, entry) in std::fs::read_dir(root)?.enumerate() {
+        if count >= MAX_FILES * 2 {
+            return Err(Error::new(
+                "RESOURCE_LIMIT",
+                "Too many Skill root entries",
+                2,
+            ));
+        }
+        let entry = entry?;
+        if entry
+            .file_name()
+            .to_string_lossy()
+            .eq_ignore_ascii_case("SKILL.md")
+        {
+            found.push(entry);
+        }
+    }
+    if found.len() != 1 || found[0].file_name() != "SKILL.md" {
         return fail(
             "SKILL_ENTRYPOINT",
-            "Expected exactly one of SKILL.md, skill.md, skills.md",
+            "Expected a single exact SKILL.md entrypoint; legacy entrypoints are unsupported",
         );
     }
     let path = found[0].path();
@@ -137,6 +149,17 @@ pub fn entrypoint(root: &Path) -> Result<PathBuf> {
         return fail("SKILL_ENTRYPOINT", "Skill entrypoint is not a regular file");
     }
     Ok(path)
+}
+pub fn skill(root: &Path) -> Result<SkillFrontmatter> {
+    let entry = entrypoint(root)?;
+    config::skill::parse(&paths::read(&entry, config::skill::MAX_SKILL_BYTES)?)
+}
+pub fn validate_skill(root: &Path, package: &LockedPackage) -> Result<SkillFrontmatter> {
+    let meta = skill(root).map_err(|e| e.package(&package.source.id()))?;
+    meta.matches_directory(&package.directory)
+        .and_then(|()| meta.matches_directory(&package.metadata.name))
+        .map_err(|e| e.package(&package.source.id()))?;
+    Ok(meta)
 }
 #[derive(Clone)]
 pub struct Store {

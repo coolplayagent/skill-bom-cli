@@ -15,7 +15,7 @@
 | `auth login [--username NAME] [--password-stdin]` | 登录 W3；默认隐藏密码输入，脚本需同时提供两个选项 |
 | `auth status` / `auth logout` | 查看本地记录 / 清理 skill-bom 自身凭据；无需项目配置 |
 
-通用选项有 `--manifest PATH`、`--global`、`--target PATH`、`--offline`、`--strict-metadata`、`--format json`。`--format spdx-json` 只适用于 `bom`。`install --locked` 要求匹配的锁；`install --frozen` 还禁止网络；`install --dry-run` 输出计划而不修改目标或锁。
+通用选项有 `--manifest PATH`、`--global`、`--target PATH`、`--agent universal|codex|claude-code|cursor|relayagent`、`--offline`、`--strict-metadata`、`--format json`。`--format spdx-json` 只适用于 `bom`。`install --locked` 要求匹配的锁；`install --frozen` 还禁止网络；`install --dry-run` 输出计划而不修改目标或锁。
 
 `sync` 默认升级所有根依赖及可升级的传递依赖；`sync alias` 沿用 `update alias` 的定向规则，别名必须是根依赖。`sync --dry-run` 显示新增、替换、删除和冲突，允许填充内容缓存，但不改锁或目标。`--offline sync` 报错，因为升级必须查询候选版本。实际同步先验证全部内容，再使用安装事务部署，部署成功后才写 `skills.lock`。若最后写锁失败，按错误提示重新运行 `sync` 以对齐锁与安装记录。
 

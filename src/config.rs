@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+#[path = "config/skill.rs"]
+pub mod skill;
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Project {
@@ -14,6 +17,8 @@ pub struct Project {
 #[serde(deny_unknown_fields)]
 pub struct Install {
     pub target: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<Agent>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -55,6 +60,12 @@ impl Manifest {
         Ok(m)
     }
     pub fn validate(&self) -> Result<()> {
+        if self.install.target.is_some() && self.install.agent.is_some() {
+            return fail(
+                "CONFIG",
+                "install.target and install.agent are mutually exclusive",
+            );
+        }
         if self.schema_version != SCHEMA {
             return fail("SCHEMA_VERSION", "Unsupported manifest schema");
         }
@@ -87,7 +98,7 @@ impl Manifest {
         let mut supplements = std::collections::BTreeSet::new();
         for s in &self.package_metadata {
             let id = self.source(&s.source)?.id();
-            if !safe_name(&s.name)
+            if !deployment_name(&s.name)
                 || !(s.source.version.as_deref().is_some_and(exact_version)
                     || s.source
                         .rev
@@ -288,9 +299,24 @@ pub struct Scope {
     pub target: PathBuf,
     pub cache: PathBuf,
     pub owner: String,
+    pub agent: Option<Agent>,
+    pub legacy_target: PathBuf,
+    global: bool,
+    agent_overridden: bool,
 }
 impl Scope {
     pub fn new(manifest: Option<&Path>, global: bool, target: Option<&Path>) -> Result<Self> {
+        Self::with_agent(manifest, global, target, None)
+    }
+    pub fn with_agent(
+        manifest: Option<&Path>,
+        global: bool,
+        target: Option<&Path>,
+        agent: Option<Agent>,
+    ) -> Result<Self> {
+        if target.is_some() && agent.is_some() {
+            return fail("SCOPE", "--target conflicts with --agent");
+        }
         if global && manifest.is_some() {
             return fail("SCOPE", "--global conflicts with --manifest");
         }
@@ -305,10 +331,21 @@ impl Scope {
         let parent = manifest
             .parent()
             .ok_or_else(|| Error::new("PATH", "Manifest needs parent", 2))?;
+        let legacy_target = if global {
+            dirs.data_dir().join("skills")
+        } else {
+            parent.join("skills")
+        };
+        let selected = agent.unwrap_or_default();
+        let preset = if target.is_some() {
+            None
+        } else {
+            Some(selected)
+        };
         let target = match target {
             Some(p) => paths::absolute(p)?,
-            None if global => dirs.data_dir().join("skills"),
-            None => parent.join("skills"),
+            None if global => env::agent_home()?.join(selected.directory(true)),
+            None => parent.join(selected.directory(false)),
         };
         let owner = digest(manifest.to_string_lossy().as_bytes());
         Ok(Self {
@@ -317,6 +354,10 @@ impl Scope {
             target,
             cache: dirs.cache_dir().join("content-v1"),
             owner,
+            agent: preset,
+            legacy_target,
+            global,
+            agent_overridden: agent.is_some(),
         })
     }
     pub fn load(&mut self, target_overridden: bool) -> Result<Manifest> {
@@ -325,9 +366,21 @@ impl Scope {
             std::str::from_utf8(&bytes)
                 .map_err(|_| Error::new("CONFIG", "Manifest must be UTF-8", 2))?,
         )?;
-        if !target_overridden && let Some(t) = &m.install.target {
-            self.target = paths::absolute(&self.manifest.parent().unwrap().join(t))?;
+        if !target_overridden && !self.agent_overridden {
+            if let Some(t) = &m.install.target {
+                self.target = paths::absolute(&self.manifest.parent().unwrap().join(t))?;
+                self.agent = None;
+            } else if let Some(agent) = m.install.agent {
+                let base = if self.global {
+                    env::agent_home()?
+                } else {
+                    self.manifest.parent().unwrap().to_path_buf()
+                };
+                self.target = paths::absolute(&base.join(agent.directory(self.global)))?;
+                self.agent = Some(agent);
+            }
         }
+        self.target = paths::absolute(&self.target)?;
         Ok(m)
     }
 }

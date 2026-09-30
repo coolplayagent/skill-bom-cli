@@ -1,6 +1,6 @@
 # Skill BOM CLI design
 
-See [requirements R01–R17](../requirements/skill-bom-cli.md) and
+See [requirements R01–R20](../requirements/skill-bom-cli.md) and
 [test contract](../test/skill-bom-cli.md). Rust library modules are reusable;
 the binary installs interruption handling and delegates parsing/orchestration.
 
@@ -29,10 +29,13 @@ requires a stable `skillId` in `package` and a SemVer version request. URLs reje
 credentials/query/fragment; use SSH credentials or registry token_env instead.
 Registry token values are never serialized. Public requests are anonymous.
 
-Legacy frontmatter name/description are auxiliary metadata; body text is never
-interpreted as commands or dependencies. Frontmatter version discrepancies are
+Agent Skills frontmatter name/description are required Agent metadata;
+`skill.toml` and supplement names must agree with the canonical entrypoint name.
+Body text is never interpreted as commands or dependencies. Frontmatter version discrepancies are
 diagnostics. A structured version discrepancy is an error. A revision snapshot
 retains its commit identity even if skill.toml has a version.
+See [Agent Skills compatibility](agent-skills.md) for field validation,
+directory presets and historical-record handling.
 
 Exact supplements are arrays with a nested source and dependency table:
 

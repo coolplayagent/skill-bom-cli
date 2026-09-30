@@ -96,6 +96,27 @@ pub fn read(target: &Path, owner: &str) -> Result<Option<Installed>> {
     Ok(Some(state))
 }
 pub fn verify(target: &Path, state: &Installed, current: &Lock) -> Result<Verification> {
+    verify_for_agent(target, state, current, None)
+}
+pub fn verify_for_agent(
+    target: &Path,
+    state: &Installed,
+    current: &Lock,
+    agent: Option<Agent>,
+) -> Result<Verification> {
+    let mut result = verify_content(target, state, current)?;
+    for (id, p) in &state.lock.packages {
+        if result.packages.get(id).is_some_and(|s| s == "verified") {
+            let validation = store::validate_skill(&target.join(&p.directory), p)
+                .and_then(|meta| agent.map_or(Ok(()), |a| a.validate_name(&meta.name)));
+            if let Err(error) = validation {
+                result.issues.push(format!("Skill {id}: {error}"));
+            }
+        }
+    }
+    Ok(result)
+}
+fn verify_content(target: &Path, state: &Installed, current: &Lock) -> Result<Verification> {
     ownership(target, &state.owner)?;
     let mut result = Verification {
         packages: BTreeMap::new(),
@@ -168,7 +189,7 @@ pub fn plan(target: &Path, owner: &str, lock: &Lock) -> Result<Plan> {
     if target.exists() {
         for e in std::fs::read_dir(target)? {
             let name = e?.file_name().to_string_lossy().into_owned();
-            existing.insert(name.to_lowercase(), name);
+            existing.insert(directory_key(&name), name);
         }
     }
     for (name, (id, p)) in &desired {
@@ -180,7 +201,7 @@ pub fn plan(target: &Path, owner: &str, lock: &Lock) -> Result<Plan> {
                     package: (*id).clone(),
                 });
             }
-        } else if let Some(found) = existing.get(&name.to_lowercase()) {
+        } else if let Some(found) = existing.get(&directory_key(name)) {
             plan.conflicts
                 .push(format!("Unmanaged directory collision: {found}"));
         } else {
@@ -201,7 +222,7 @@ pub fn plan(target: &Path, owner: &str, lock: &Lock) -> Result<Plan> {
         }
     }
     if let Some(old) = &old {
-        let status = verify(target, old, &old.lock)?;
+        let status = verify_content(target, old, &old.lock)?;
         for (id, s) in status.packages {
             if s != "verified" {
                 plan.conflicts.push(format!(
@@ -273,6 +294,9 @@ pub fn deploy_with_hook(
     _guard: &TargetGuard,
     mut hook: impl FnMut(&str, usize) -> Result<()>,
 ) -> Result<Plan> {
+    for package in lock.packages.values() {
+        store::validate_skill(&cache.get(package)?, package)?;
+    }
     let plan = plan(target, owner, lock)?;
     if !plan.conflicts.is_empty() {
         return fail("INSTALL_CONFLICT", plan.conflicts.join("; "));
@@ -371,8 +395,8 @@ fn validate_journal(j: &Journal, owner: &str) -> Result<()> {
     }
     let mut names = BTreeSet::new();
     for c in &j.changes {
-        if !safe_name(&c.directory)
-            || !names.insert(c.directory.to_lowercase())
+        if !deployment_name(&c.directory)
+            || !names.insert(directory_key(&c.directory))
             || !["add", "replace", "remove"].contains(&c.action.as_str())
         {
             return fail("TRANSACTION_INVALID", "Invalid transaction operation");

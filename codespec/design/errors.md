@@ -8,7 +8,7 @@ clients should match codes. See [design](skill-bom-cli.md).
 | --- | --- |
 | Configuration | INPUT, CONFIG, SOURCE_COMBINATION, VERSION, ARCHIVE_CONFIG, TAG_PATTERN, REVISION, REGISTRY, PACKAGE_ID, URL, SCOPE, FORMAT, ALIAS, TIMESTAMP, SCHEMA_VERSION |
 | Resolution | VERSION_CONFLICT, DEPENDENCY_CYCLE, DIRECTORY_CONFLICT, RESOURCE_LIMIT |
-| Metadata | METADATA, METADATA_OVERRIDE, METADATA_UNKNOWN, VERSION_MISMATCH, SKILL_ENTRYPOINT |
+| Metadata | METADATA, METADATA_OVERRIDE, METADATA_UNKNOWN, VERSION_MISMATCH, SKILL_ENTRYPOINT, SKILL_FORMAT, SKILL_NAME_MISMATCH, AGENT_SKILL_NAME |
 | Sources | SOURCE, SOURCE_IDENTITY_CHANGED, SOURCE_VERSION_UNAVAILABLE, SOURCE_BLOCKED, PROTOCOL, PAGINATION_LOOP, CHECKSUM_MISMATCH, CONTENT_CHANGED, SUBMODULE_UNMATERIALIZED, LFS_UNMATERIALIZED |
 | Transport/authentication | NETWORK, NETWORK_TLS, NETWORK_TIMEOUT, HTTP_RETRY_EXHAUSTED, RATE_LIMIT, HTTP_STATUS, AUTH_INPUT, MISSING_AUTH_TOKEN, AUTH_REQUIRED, AUTH_STORE_UNAVAILABLE, GIT_UNAVAILABLE, GIT_FAILED, GIT_TIMEOUT, GIT_PROTOCOL, REVISION_AMBIGUOUS, PROCESS |
 | Files/content | IO, JSON, PATH, UNSAFE_PATH, CASE_COLLISION, ARCHIVE, ARCHIVE_LINK, ARCHIVE_DUPLICATE, ARCHIVE_SIZE, CONTENT_MISSING, CACHE_KEY, CACHE_UNAVAILABLE, CACHE_CORRUPT, OFFLINE_MISS |
@@ -20,6 +20,12 @@ before rerunning install. Run lock after intentional manifest edits. Retry onlin
 to repair a missing/corrupt cache. Registry ownership changes require explicit
 source declaration updates. Unsupported historical snapshots cannot be repaired
 by silently fetching latest content.
+
+SKILL_ENTRYPOINT requires exact SKILL.md; SKILL_FORMAT reports invalid standard
+YAML/fields, SKILL_NAME_MISMATCH reports inconsistent deployment identity, and
+AGENT_SKILL_NAME reports a selected client's reserved name. These use exit 1;
+resource-budget exhaustion uses RESOURCE_LIMIT/exit 2. Correct upstream content
+and select a new immutable release instead of editing locked bytes in place.
 
 W3 authentication errors use exit 2. AUTH_INPUT covers invalid input mode,
 empty/oversized fields and non-UTF-8 stdin. MISSING_AUTH_TOKEN covers an absent,

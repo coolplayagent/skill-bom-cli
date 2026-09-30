@@ -1,7 +1,7 @@
 # Skill BOM CLI
 
 `skill-bom` resolves Skill dependencies, pins immutable content, installs it into
-an ordinary directory, and exports auditable JSON or SPDX 2.3 bills of materials.
+an Agent discovery directory, and exports auditable JSON or SPDX 2.3 bills of materials.
 It never executes Skill content, installs runtime tools, configures MCP, or
 publishes to a registry. `skill.toml` is this project's dependency protocol,
 not a ClawHub standard.
@@ -37,11 +37,17 @@ and makes no network requests. `install --dry-run` resolves and checks content
 and reports additions, replacements, removals and conflicts without creating or
 modifying the installation target or lockfile. It may populate the content cache.
 
-The default project target is `skills/` beside the manifest. `--manifest PATH`
+The default project target is `.agents/skills/` beside the manifest. `--manifest PATH`
 selects another project. `[install].target` is relative to the manifest; the
 `--target PATH` override is relative to the invocation directory. `--global`
-uses standard OS configuration, data and cache directories, independently of
-project environments. Actual manifest, lock and target paths are printed to
+uses `~/.agents/skills/` and skill-bom's own OS configuration and cache directories.
+Use `--agent universal|codex|claude-code|cursor|relayagent` or `[install].agent`
+for a client preset. RelayAgent uses project `.skills/` and global `~/.relay/skills/`.
+Agent and target selectors are mutually exclusive at each configuration layer;
+CLI selection overrides the manifest. Old targets remain available through
+explicit `--target` or `[install].target`; no existing files are migrated.
+See [Agent compatibility](docs/02-user-guide/05-agent-skills.md).
+Actual manifest, lock and target paths are printed to
 stderr. JSON command results go to stdout; errors/diagnostics go to stderr.
 
 ClawHub references must be owner qualified (`@owner/slug`). AgentCenter uses an
@@ -63,9 +69,13 @@ Automatic tokens are confined to `https://agent.huawei.com`. Linux requires an
 available Secret Service; headless CI can continue to use `token_env`.
 Loopback HTTP is allowed for local tests; remote archives/registries require HTTPS.
 
-A Skill must contain exactly one of `SKILL.md`, `skill.md`, or `skills.md`.
-Structured metadata fixes its name and dependencies. Legacy Skills use the
-frontmatter name and have **unknown dependencies**, unless an exact-source
+A Skill must contain an exact `SKILL.md` with valid Agent Skills YAML frontmatter,
+including `name` and `description`. Standard fields are strictly validated;
+client extensions and all resources remain byte-identical and are never executed.
+Lowercase legacy entrypoints and incomplete frontmatter fail before deployment,
+including cached, locked and offline installs. `skill.toml` supplies dependencies
+and version; its name must agree with `SKILL.md`. Standard Skills without it have
+**unknown dependencies**, unless an exact-source
 `[[package_metadata]]` supplement is provided. `--strict-metadata` requires
 upstream declarations or a `complete = true` supplement. Supplement examples
 are in [the design](codespec/design/skill-bom-cli.md).
@@ -94,5 +104,6 @@ Development and acceptance evidence are specified in
 this README; see the generated final verification report for the tested snapshot.
 
 For isolated automation, `SKILL_BOM_HOME` may point to an absolute directory;
-its `config/`, `data/` and `cache/` replace the standard user directories. Tests
+its `config/`, `data/` and `cache/` replace the standard user directories;
+`home/` supplies an isolated Agent home. Tests
 use this override to avoid modifying real user environments on every platform.

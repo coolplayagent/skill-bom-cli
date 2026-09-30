@@ -36,7 +36,7 @@ pub fn archive(name: &str, version: &str) -> Vec<u8> {
     zip(&[
         (
             "SKILL.md",
-            format!("---\nname: {name}\n---\nInstruction text; never executed.\n").as_bytes(),
+            format!("---\nname: {name}\ndescription: Test skill\n---\nInstruction text; never executed.\n").as_bytes(),
         ),
         ("skill.toml", metadata(name, version, "").as_bytes()),
     ])
@@ -62,7 +62,7 @@ pub fn package(cache: &Store, name: &str, version: &str) -> LockedPackage {
     let tmp = tempfile::tempdir().unwrap();
     std::fs::write(
         tmp.path().join("SKILL.md"),
-        format!("---\nname: {name}\n---\n{version}\n"),
+        format!("---\nname: {name}\ndescription: Test skill\n---\n{version}\n"),
     )
     .unwrap();
     std::fs::write(tmp.path().join("skill.toml"), metadata(name, version, "")).unwrap();

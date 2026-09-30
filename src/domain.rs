@@ -8,6 +8,10 @@ use std::fmt;
 pub mod auth;
 
 pub type Result<T> = std::result::Result<T, Error>;
+#[path = "domain/skill.rs"]
+pub mod skill;
+pub use skill::{Agent, SkillFrontmatter, deployment_name, directory_key, skill_name};
+
 pub const SCHEMA: u32 = 1;
 pub const RESOLVER: &str = "1";
 pub const MAX_PACKAGES: usize = 256;
@@ -367,13 +371,13 @@ impl Lock {
         let mut directories = BTreeSet::new();
         for (id, p) in &self.packages {
             if p.source.id() != *id
-                || !safe_name(&p.directory)
+                || !deployment_name(&p.directory)
                 || !is_hex(&p.tree_sha256, 64)
                 || p.tree_algorithm != "skill-tree-sha256-v1"
             {
                 return fail("LOCK_INVALID", format!("Invalid locked package {id}"));
             }
-            if !directories.insert(p.directory.to_ascii_lowercase()) {
+            if !directories.insert(directory_key(&p.directory)) {
                 return fail("DIRECTORY_CONFLICT", &p.directory);
             }
             if let Some(rev) = &p.candidate.revision
@@ -396,6 +400,7 @@ impl Lock {
             let mut last_path = None;
             let mut bytes = 0u64;
             let mut entries = 0;
+            let mut legacy_entries = 0;
             if p.files.len() > MAX_FILES {
                 return fail("RESOURCE_LIMIT", "Locked file inventory exceeds budget");
             }
@@ -413,14 +418,16 @@ impl Lock {
                 bytes = bytes
                     .checked_add(file.size)
                     .ok_or_else(|| Error::new("RESOURCE_LIMIT", "File size overflow", 2))?;
-                if ["SKILL.md", "skill.md", "skills.md"].contains(&file.path.as_str()) {
+                if file.path == "SKILL.md" {
                     entries += 1;
+                } else if ["skill.md", "skills.md"].contains(&file.path.as_str()) {
+                    legacy_entries += 1;
                 }
             }
             if bytes > MAX_BYTES {
                 return fail("RESOURCE_LIMIT", "Locked content exceeds byte budget");
             }
-            if entries != 1 || tree_digest(&p.files)? != p.tree_sha256 {
+            if (entries != 1 && legacy_entries != 1) || tree_digest(&p.files)? != p.tree_sha256 {
                 return fail(
                     "LOCK_INVALID",
                     "Entrypoint or content tree digest differs from inventory",

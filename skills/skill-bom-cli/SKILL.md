@@ -2,7 +2,7 @@
 name: skill-bom-cli
 description: Manage declared Skill dependencies with the skill-bom CLI. Use for skills.toml, skills.lock, project or global Skill installation, provenance, drift checks, and JSON or SPDX BOM export.
 metadata:
-  version: "0.0.5"
+  version: "0.0.6"
 ---
 
 # Skill BOM CLI
@@ -43,6 +43,13 @@ mode outside the trusted internal network.
   to inspect the deployment plan first; sync requires online candidate queries.
 - Use `install --dry-run` to review additions, replacements, removals and
   conflicts before a requested deployment.
+- Select `--agent universal|codex|claude-code|cursor|relayagent` or persist
+  `[install].agent`. The default is `.agents/skills/`; RelayAgent uses project
+  `.skills/` and global `~/.relay/skills/`. Agent and target selectors conflict
+  at the same layer. Reuse the selection for list, verify and installed BOM.
+- Every package needs an exact `SKILL.md` with valid Agent Skills name and
+  description. Client extensions and resources are preserved. Never repair
+  upstream bytes silently; format errors also block cached/offline installs.
 - Use `tree` and `why <package>` to explain why a Skill is present. Use
   `verify` for installed content and `bom --from lock|installed --format
   json|spdx-json` for an audit artifact.

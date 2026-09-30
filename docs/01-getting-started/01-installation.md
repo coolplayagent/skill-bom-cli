@@ -24,7 +24,7 @@ kind = "clawhub"
 url = "https://clawhub.ai"
 ```
 
-包名只是示例。运行 `skill-bom lock` 生成 `skills.lock`，再运行 `skill-bom install --locked`。CLI 会在 stderr 明确打印所用声明、锁文件和目标路径；默认项目目标是声明旁的 `skills/`。将 `skills.toml` 与 `skills.lock` 一起提交，其他机器才能安装相同的内容。
+包名只是示例。运行 `skill-bom lock` 生成 `skills.lock`，再运行 `skill-bom install --locked`。CLI 会在 stderr 明确打印所用声明、锁文件和目标路径；默认项目目标是声明旁的 `.agents/skills/`。将 `skills.toml` 与 `skills.lock` 一起提交，其他机器才能安装相同的内容。
 
 首次试用远端 Skill 前，可用 `skill-bom install --dry-run` 查看目录增删及冲突；这一步不会修改目标或锁文件，但可能填充内容缓存。
 
