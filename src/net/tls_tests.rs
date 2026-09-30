@@ -87,6 +87,17 @@ fn verified_tls_accepts_trusted_certificate_and_reports_real_timeouts() {
     http.get(&server.url, None).unwrap();
     assert_eq!(server.requests.load(Ordering::SeqCst), 4);
 
+    // The chain is trusted, but this hostname is absent from the certificate.
+    let wrong_name = server.url.replace("127.0.0.1", "localhost");
+    let error = http.get_x_auth(&wrong_name, "fixture-token").err().unwrap();
+    assert_eq!(error.code, "NETWORK_TLS");
+    assert_eq!(server.requests.load(Ordering::SeqCst), 4);
+    Http::with_tls_policy(false, false)
+        .unwrap()
+        .get_x_auth(&wrong_name, "fixture-token")
+        .unwrap();
+    assert_eq!(server.requests.load(Ordering::SeqCst), 5);
+
     let slow = Server::new(|_| {
         std::thread::sleep(Duration::from_millis(200));
         response("application/json", b"{}")
