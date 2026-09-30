@@ -355,6 +355,12 @@ fn check_skill_links(skill_root: &Path) {
     let root = skill_root.canonicalize().unwrap();
     let mut all = vec![];
     files(&root, &mut all);
+    // Bazel runfiles can be symlinks outside this directory. Archive identity is
+    // the logical relative path, not the filesystem target of a runfile symlink.
+    let inventory: BTreeSet<_> = all
+        .iter()
+        .map(|path| path.strip_prefix(&root).unwrap().to_path_buf())
+        .collect();
     let entrypoint = std::fs::read_to_string(root.join("SKILL.md")).unwrap();
     for name in [
         "commands",
@@ -375,15 +381,26 @@ fn check_skill_links(skill_root: &Path) {
             if target.is_empty() || target.contains("://") {
                 continue;
             }
-            let destination = file
+            let mut destination = file
+                .strip_prefix(&root)
+                .unwrap()
                 .parent()
                 .unwrap()
-                .join(target)
-                .canonicalize()
-                .unwrap_or_else(|_| panic!("broken Skill link {target} from {}", file.display()));
+                .to_path_buf();
+            for component in Path::new(target).components() {
+                match component {
+                    std::path::Component::Normal(name) => destination.push(name),
+                    std::path::Component::CurDir => (),
+                    std::path::Component::ParentDir => {
+                        assert!(destination.pop(), "Skill link leaves the release archive")
+                    }
+                    _ => panic!("Skill links must be relative to the release archive"),
+                }
+            }
             assert!(
-                destination.starts_with(&root) && destination.is_file(),
-                "Skill link leaves the release archive"
+                inventory.contains(&destination),
+                "broken Skill link {target} from {}",
+                file.display()
             );
         }
     }
