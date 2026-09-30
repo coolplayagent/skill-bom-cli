@@ -17,7 +17,7 @@ impl Http {
     pub fn secure_login(&self, username: &str, password: &str) -> Result<Response> {
         self.login_at(W3_LOGIN_URL, username, password)
     }
-    fn login_at(&self, url: &str, username: &str, password: &str) -> Result<Response> {
+    pub(super) fn login_at(&self, url: &str, username: &str, password: &str) -> Result<Response> {
         let mut body =
             serde_json::json!({"user":username,"password":password,"requireUserInfo":"true"});
         let result = self.request(Method::POST, url, Some(&body), None, AuthMode::Login);

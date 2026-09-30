@@ -185,3 +185,43 @@ fn validate_accepts_no_token_env_and_ignores_broken_auth_metadata() {
         true
     );
 }
+
+#[test]
+fn login_rejects_invalid_tls_setting_before_network_or_credential_storage() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut child = command(
+        temp.path(),
+        &[
+            "auth",
+            "login",
+            "--username",
+            "alice",
+            "--password-stdin",
+            "--format",
+            "json",
+        ],
+    )
+    .env("AGENTCENTER_VERIFY_TLS", "invalid-setting-secret")
+    .stdin(Stdio::piped())
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped())
+    .spawn()
+    .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"fixture-password\n")
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(error(&output)["code"], "CONFIG");
+    let text = String::from_utf8_lossy(&output.stderr);
+    assert!(!text.contains("invalid-setting-secret") && !text.contains("fixture-password"));
+    assert!(
+        !temp
+            .path()
+            .join("home/config/auth-v1/session.json")
+            .exists()
+    );
+}

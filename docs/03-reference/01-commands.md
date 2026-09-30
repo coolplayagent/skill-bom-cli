@@ -30,4 +30,9 @@
 并附带 `skill-bom auth login` 指引。退出清理失败不会输出成功结果。
 完整契约见[错误代码](https://github.com/coolplayagent/skill-bom-cli/blob/main/codespec/design/errors.md)。
 
+`NETWORK_TLS` 表示证书验证或 TLS 握手/协议失败，`NETWORK_TIMEOUT` 表示超时，
+其余连接/读取失败使用 `NETWORK`。W3 与 AgentCenter 的
+`AGENTCENTER_VERIFY_TLS` 默认 `false`，可设为 `true` 强制验证；无效值使用
+`CONFIG`。范围、风险和平台设置见 [AgentCenter TLS 说明](../02-user-guide/04-agentcenter.md#内网-tls-证书与排错)。
+
 [上一篇：参考目录](README.md) · [下一篇：文件格式](02-file-formats.md)

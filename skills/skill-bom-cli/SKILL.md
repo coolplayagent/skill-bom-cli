@@ -2,7 +2,7 @@
 name: skill-bom-cli
 description: Manage declared Skill dependencies with the skill-bom CLI. Use for skills.toml, skills.lock, project or global Skill installation, provenance, drift checks, and JSON or SPDX BOM export.
 metadata:
-  version: "0.0.4"
+  version: "0.0.5"
 ---
 
 # Skill BOM CLI
@@ -26,6 +26,14 @@ their own W3 credentials in the system keyring. `auth status` reads local metada
 `token_env` overrides that login and remains required for custom AgentCenter
 origins. Never ask the user to paste passwords or tokens into the conversation,
 arguments, declarations or lockfiles; login uses hidden input or password stdin.
+
+W3 login and AgentCenter HTTPS use `AGENTCENTER_VERIFY_TLS=false` by default
+for the internal certificate-chain compatibility reported in Issue #4. This
+disables certificate and hostname verification and exposes credentials/content
+to interception. Set `AGENTCENTER_VERIFY_TLS=true` to require verification;
+untrusted chains then fail with `NETWORK_TLS`. Other HTTPS sources retain strict
+verification. See the book's AgentCenter chapter before using this compatibility
+mode outside the trusted internal network.
 
 - Use `validate` to check declarations and `lock` to resolve the full graph.
 - Use `update [alias]` only when upgrades are requested; ordinary `install`

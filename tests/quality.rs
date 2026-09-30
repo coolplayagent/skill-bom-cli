@@ -193,7 +193,7 @@ fn docs_examples_and_build_contracts_agree() {
     let _: PackageManifest = toml::from_str(include_str!("../examples/skill.toml")).unwrap();
     let requirements = include_str!("../codespec/requirements/skill-bom-cli.md");
     let tests = include_str!("../codespec/test/skill-bom-cli.md");
-    for id in 1..=17 {
+    for id in 1..=18 {
         assert!(requirements.contains(&format!("R{id:02}")));
         assert!(tests.contains(&format!("R{id:02}")));
     }

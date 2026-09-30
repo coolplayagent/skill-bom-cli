@@ -10,6 +10,11 @@ W3 认证的显式测试目标为 `auth`、`auth_protocol`、`auth_process`、`a
 Linux 凭据库失败测试使用不存在的临时 D-Bus 地址，不访问真实登录态。
 系统凭据库适配器使用官方 mock 测试；真实平台后端及 W3 在线登录需另行记录。
 
+Issue #4 的 TLS 回归由 Rust 本地 HTTPS 服务和临时自签名证书验证：默认兼容、
+强制验证拒绝、测试专用可信根成功、认证重定向拒绝、超时分类及普通归档的
+严格验证。CLI 子进程测试环境变量的实际生效；不修改进程全局环境或系统证书库。
+这些证据不等同于华为内网服务实测。
+
 ```sh
 cargo fmt --all -- --check
 cargo check --locked --all-targets --all-features

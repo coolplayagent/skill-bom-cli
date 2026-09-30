@@ -25,7 +25,8 @@ impl<T: Transport + ?Sized> LoginGateway for W3Gateway<'_, T> {
             .secure_login(username, password.expose())
             .map_err(|mut error| {
                 error.exit_code = 2;
-                error.phase("authentication").hint(LOGIN_HINT)
+                let hint = format!("{} {LOGIN_HINT}", error.hint);
+                error.phase("authentication").hint(&hint)
             })?;
         let value: serde_json::Value = serde_json::from_slice(&response.bytes).map_err(|_| {
             Error::new("PROTOCOL", "W3 login returned invalid JSON", 2).hint(LOGIN_HINT)

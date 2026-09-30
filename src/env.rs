@@ -4,6 +4,24 @@ use std::path::PathBuf;
 pub fn variable(name: &str) -> Option<String> {
     std::env::var(name).ok()
 }
+pub fn agentcenter_verify_tls() -> Result<bool> {
+    parse_tls_verification(std::env::var("AGENTCENTER_VERIFY_TLS"))
+}
+fn parse_tls_verification(value: std::result::Result<String, std::env::VarError>) -> Result<bool> {
+    match value {
+        Err(std::env::VarError::NotPresent) => Ok(false),
+        Ok(value) => match value.trim().to_ascii_lowercase().as_str() {
+            "true" | "1" | "yes" | "on" => Ok(true),
+            "false" | "0" | "no" | "off" => Ok(false),
+            _ => Err(tls_configuration_error()),
+        },
+        Err(std::env::VarError::NotUnicode(_)) => Err(tls_configuration_error()),
+    }
+}
+fn tls_configuration_error() -> Error {
+    Error::new("CONFIG", "AGENTCENTER_VERIFY_TLS must be a boolean", 2)
+        .hint("Set AGENTCENTER_VERIFY_TLS to true/false, 1/0, yes/no or on/off.")
+}
 pub fn cwd() -> Result<PathBuf> {
     Ok(std::env::current_dir()?)
 }
@@ -84,4 +102,31 @@ pub fn timestamp(explicit: Option<&str>) -> Result<String> {
 
 pub fn arguments() -> Vec<std::ffi::OsString> {
     std::env::args_os().collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tls_configuration_defaults_and_explicit_values() {
+        assert!(!parse_tls_verification(Err(std::env::VarError::NotPresent)).unwrap());
+        for value in ["true", "1", "yes", "on", " TRUE ", "Yes", "ON"] {
+            assert!(parse_tls_verification(Ok(value.into())).unwrap());
+        }
+        for value in ["false", "0", "no", "off", " FALSE ", "No", "OFF"] {
+            assert!(!parse_tls_verification(Ok(value.into())).unwrap());
+        }
+        for value in ["", " ", "tru", "2", "private-invalid-value"] {
+            let error = parse_tls_verification(Ok(value.into())).unwrap_err();
+            assert_eq!(error.code, "CONFIG");
+            assert!(!format!("{error:?}").contains("private-invalid-value"));
+        }
+        let error = parse_tls_verification(Err(std::env::VarError::NotUnicode(
+            "private-invalid-value".into(),
+        )))
+        .unwrap_err();
+        assert_eq!(error.code, "CONFIG");
+        assert!(!format!("{error:?}").contains("private-invalid-value"));
+    }
 }

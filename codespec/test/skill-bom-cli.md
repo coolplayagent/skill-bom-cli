@@ -24,6 +24,7 @@ it does not predeclare passing results. Actual runs are recorded separately in
 | R15 | agentcenter: explicit skillId/config, X-Auth-Token GET/POST, identity/business errors, latest SemVer selection, ZIP/content evidence, offline install, historical lock re-fetch and unavailable fresh historical request; Bazel adapter target and CLI lock/install/verify/BOM |
 | R16 | cli: sync first install, repeat, preview, offline and unknown alias, upgrade, verified deployment and lock/installation agreement, source failure, content mismatch and installation conflict/local modification preservation |
 | R17 | auth: lifecycle, rejected login preservation, storage faults, journals, namespace isolation, explicit overrides, read/write replay and logout fencing; auth_protocol: W3 token/expiry fixtures, AgentCenter refresh, trusted origin, cache/offline zero calls and HTTP auth signals; auth_process: cross-process refresh merging, logout fencing, bounded lock waiting and process interruption after each secret write; auth_cli: manifest-independent commands, local status, stdin constraints, redaction, unavailable isolated Linux bus; domain/net/interfaces/keyring unit tests: pure expiry including clock overflow, exact secureLogin wire headers/body, redirects, input and official mock backend error mapping |
+| R18 | env unit tests: absent/true/false aliases, malformed/empty/non-Unicode values and redaction; net TLS unit tests: self-signed W3/detail/download acceptance, strict rejection without retries, trusted-root success, unchanged ordinary GET verification, redirects/offline, real timeouts and typed sanitized errors; agentcenter CLI: environment-controlled HTTPS detail/ZIP acquisition, invalid settings, strict rejection and archive isolation; auth_cli: invalid TLS setting before network/storage; auth_protocol: transport diagnostics survive login |
 
 The AgentCenter fixture is derived from Issue #2's reported contract. Internal
 RelayAgent source, a versioned API Schema and live service credentials were not
@@ -39,6 +40,13 @@ The Linux CLI failure test points D-Bus at a nonexistent temporary socket.
 No actual Windows Credential Manager, macOS Keychain or successful Linux Secret
 Service login is claimed by those fixtures. W3/AgentCenter live authentication
 requires authorized credentials and is recorded separately if exercised.
+
+Issue #4 TLS regression tests generate ephemeral certificates with rcgen and serve
+HTTPS with rustls on loopback. They exercise actual handshakes, not mocked TLS
+outcomes. They do not contact Huawei or access a real credential store. The
+certificate is trusted only by a test-local client in the verified-success case;
+no system trust store is modified. Environment settings are changed only on
+isolated child processes. No live W3/AgentCenter TLS success is claimed.
 
 Unit tests (`cargo test --locked --lib --bins --all-features`) and integration
 tests (`cargo test --locked --tests --all-features`) are separate entry points.

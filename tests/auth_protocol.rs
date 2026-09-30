@@ -34,6 +34,45 @@ fn response(value: Value) -> Result<Response> {
 }
 
 #[test]
+fn tls_and_timeout_diagnostics_survive_login_without_auth_refresh() {
+    struct FailedTransport(&'static str);
+    impl Transport for FailedTransport {
+        fn get(&self, _: &str, _: Option<&str>) -> Result<Response> {
+            panic!("login must not use GET")
+        }
+        fn secure_login(&self, _: &str, _: &str) -> Result<Response> {
+            Err(Error::new(self.0, "Sanitized transport failure", 2)
+                .hint("Check certificate chain or connectivity."))
+        }
+    }
+    let clock = FakeClock::default();
+    let temp = tempfile::tempdir().unwrap();
+    let sessions = Sessions::new(temp.path()).unwrap();
+    let secrets = MemorySecrets::default();
+    let gateway = Gateway::default();
+    let service = sessions.service(&secrets, &gateway, &clock);
+    service.login("alice", &password()).unwrap();
+    for code in ["NETWORK_TLS", "NETWORK_TIMEOUT", "NETWORK"] {
+        let error = W3Gateway(&FailedTransport(code))
+            .login("alice", &password(), clock.now())
+            .unwrap_err();
+        assert_eq!(error.code, code);
+        assert_eq!(error.phase.as_ref(), "authentication");
+        assert!(error.hint.contains("certificate chain"));
+        assert!(error.hint.contains("skill-bom auth login"));
+        assert!(!format!("{error:?}").contains("fixture-password"));
+        let calls = Cell::new(0);
+        let result = execute(&service, ORIGIN, None, Operation::Read, |_| {
+            calls.set(calls.get() + 1);
+            Err::<(), _>(Error::new(code, "Sanitized transport failure", 2))
+        });
+        assert_eq!(result.unwrap_err().code, code);
+        assert_eq!(calls.get(), 1);
+    }
+    assert_eq!(gateway.calls.load(Ordering::SeqCst), 1);
+}
+
+#[test]
 fn login_token_and_expiry_contract_fixtures() {
     let clock = FakeClock::default();
     for (value, seconds, source) in [

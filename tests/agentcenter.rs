@@ -1,4 +1,7 @@
 mod common;
+#[allow(dead_code)]
+#[path = "../src/net/tls_fixture.rs"]
+mod tls_fixture;
 use common::{
     archive,
     http::{Reply, Server},
@@ -374,4 +377,106 @@ fn download_rate_limit_and_business_auth_errors_are_handled() {
         p.materialize(&s, &c, d, None).unwrap_err().code,
         "AUTH_REQUIRED"
     );
+}
+
+#[test]
+fn cli_tls_environment_controls_agentcenter_but_not_archive_requests() {
+    let zip = archive("review", "1.0.0");
+    let server = tls_fixture::Server::new(move |request| {
+        assert!(
+            request
+                .to_ascii_lowercase()
+                .contains("x-auth-token: fixture-token")
+        );
+        if request.starts_with("GET /mcpService/external/skills/v1/get?") {
+            tls_fixture::response(
+                "application/json",
+                br#"{"code":0,"data":{"skillId":"review","latestVersion":"1.0.0"}}"#,
+            )
+        } else {
+            assert!(request.starts_with("POST /mcpService/external/skills/v1/download "));
+            tls_fixture::response("application/zip", &zip)
+        }
+    });
+    let binary = std::path::Path::new(env!("CARGO_BIN_EXE_skill-bom"));
+    let binary = if binary.is_absolute() {
+        binary.to_path_buf()
+    } else {
+        std::env::current_dir().unwrap().join(binary)
+    };
+    for policy in [
+        None,
+        Some("false"),
+        Some("true"),
+        Some("invalid-secret"),
+        Some(""),
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        let manifest = format!(
+            "schema_version=1\n[project]\nname='test'\n[registries.market]\nkind='agentcenter'\nurl={:?}\ntoken_env='FIXTURE_W3_TOKEN'\n[dependencies.review]\nregistry='market'\npackage='review'\nversion='=1.0.0'\n",
+            server.url
+        );
+        std::fs::write(temp.path().join("skills.toml"), manifest).unwrap();
+        let before = server.requests.load(Ordering::SeqCst);
+        let mut command = Command::new(&binary);
+        command
+            .args(["lock", "--format", "json"])
+            .current_dir(temp.path())
+            .env("SKILL_BOM_HOME", temp.path().join("home"))
+            .env("FIXTURE_W3_TOKEN", "fixture-token")
+            .env_remove("AGENTCENTER_VERIFY_TLS");
+        if let Some(value) = policy {
+            command.env("AGENTCENTER_VERIFY_TLS", value);
+        }
+        let output = command.output().unwrap();
+        if policy.is_none() || policy == Some("false") {
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let lock: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(temp.path().join("skills.lock")).unwrap())
+                    .unwrap();
+            let node = &lock["packages"][format!("agentcenter:{}/skills/review#", server.url)];
+            assert!(node["evidence"]["archive_sha256"].is_string());
+            assert!(server.requests.load(Ordering::SeqCst) > before);
+        } else {
+            assert_eq!(output.status.code(), Some(2));
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let error: serde_json::Value =
+                serde_json::from_str(stderr.lines().last().unwrap()).unwrap();
+            assert_eq!(
+                error["error"]["code"],
+                if policy == Some("true") {
+                    "NETWORK_TLS"
+                } else {
+                    "CONFIG"
+                }
+            );
+            let text = String::from_utf8_lossy(&output.stderr);
+            assert!(!text.contains("fixture-token") && !text.contains("invalid-secret"));
+            assert_eq!(server.requests.load(Ordering::SeqCst), before);
+            assert!(!temp.path().join("skills.lock").exists());
+        }
+    }
+    let temp = tempfile::tempdir().unwrap();
+    common::write_manifest(
+        temp.path(),
+        &format!("{}/archive.zip", server.url),
+        &"a".repeat(64),
+    );
+    let before = server.requests.load(Ordering::SeqCst);
+    let output = Command::new(&binary)
+        .args(["lock", "--format", "json"])
+        .current_dir(temp.path())
+        .env("SKILL_BOM_HOME", temp.path().join("home"))
+        .env("AGENTCENTER_VERIFY_TLS", "false")
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let error: serde_json::Value = serde_json::from_str(stderr.lines().last().unwrap()).unwrap();
+    assert_eq!(error["error"]["code"], "NETWORK_TLS");
+    assert_eq!(server.requests.load(Ordering::SeqCst), before);
 }

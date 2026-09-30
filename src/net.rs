@@ -4,6 +4,8 @@ use reqwest::{Method, blocking::Client, header};
 use std::io::Read;
 use std::time::{Duration, Instant, SystemTime};
 
+#[path = "net/failure.rs"]
+mod failure;
 #[path = "net/login.rs"]
 mod login;
 pub use login::W3_LOGIN_URL;
@@ -18,6 +20,7 @@ enum AuthMode {
 pub struct Http {
     client: Client,
     loopback: Client,
+    agentcenter: Option<(Client, Client)>,
     pub offline: bool,
 }
 pub struct Response {
@@ -26,8 +29,12 @@ pub struct Response {
 }
 impl Http {
     pub fn new(offline: bool) -> Result<Self> {
-        let build = |no_proxy| {
+        Self::with_tls_policy(offline, crate::env::agentcenter_verify_tls()?)
+    }
+    fn with_tls_policy(offline: bool, verify_agentcenter_tls: bool) -> Result<Self> {
+        let build = |no_proxy: bool, verify_tls: bool| {
             let mut builder = Client::builder()
+                .danger_accept_invalid_certs(!verify_tls)
                 .timeout(Duration::from_secs(30))
                 .connect_timeout(Duration::from_secs(10))
                 .redirect(reqwest::redirect::Policy::none())
@@ -40,8 +47,13 @@ impl Http {
                 .map_err(|_| Error::new("NETWORK", "Cannot initialize TLS client", 2))
         };
         Ok(Self {
-            client: build(false)?,
-            loopback: build(true)?,
+            client: build(false, true)?,
+            loopback: build(true, true)?,
+            agentcenter: if verify_agentcenter_tls {
+                None
+            } else {
+                Some((build(false, false)?, build(true, false)?))
+            },
             offline,
         })
     }
@@ -84,13 +96,21 @@ impl Http {
                     2,
                 ));
             }
+            // Only W3 login and AgentCenter's X-Auth-Token operations use this policy.
+            let (remote, local) = if mode != AuthMode::Bearer
+                && let Some((remote, local)) = &self.agentcenter
+            {
+                (remote, local)
+            } else {
+                (&self.client, &self.loopback)
+            };
             let client = if matches!(
                 current.host_str(),
                 Some("127.0.0.1" | "localhost" | "[::1]" | "::1")
             ) {
-                &self.loopback
+                local
             } else {
-                &self.client
+                remote
             };
             let mut request = client.request(method.clone(), current.clone());
             if current.origin() == original.origin()
@@ -110,12 +130,18 @@ impl Http {
             }
             let mut res = match request.send() {
                 Ok(response) => response,
-                Err(error) if (error.is_connect() || error.is_timeout()) && retries < 2 => {
-                    retries += 1;
-                    std::thread::sleep(Duration::from_millis(100 * retries));
-                    continue;
+                Err(error) => {
+                    let failure = failure::request_error(&error);
+                    if failure.code != "NETWORK_TLS"
+                        && (error.is_connect() || error.is_timeout())
+                        && retries < 2
+                    {
+                        retries += 1;
+                        std::thread::sleep(Duration::from_millis(100 * retries));
+                        continue;
+                    }
+                    return Err(failure);
                 }
-                Err(_) => return Err(Error::new("NETWORK","HTTP request failed or timed out",2).phase("download").hint("Check connectivity and retry; credentials are read from the configured environment variable.")),
             };
             if res.status().is_redirection() {
                 if mode != AuthMode::Bearer {
@@ -211,7 +237,7 @@ impl Http {
             (&mut res)
                 .take(limit + 1)
                 .read_to_end(&mut bytes)
-                .map_err(|_| Error::new("NETWORK", "Cannot read HTTP response", 2))?;
+                .map_err(|error| failure::request_error(&error))?;
             if bytes.len() as u64 > limit {
                 return Err(Error::new(
                     "RESOURCE_LIMIT",
@@ -231,6 +257,10 @@ impl Http {
             .map_err(|_| Error::new("PROTOCOL", "Expected JSON response", 2))
     }
 }
+
+#[cfg(test)]
+#[path = "net/tls_tests.rs"]
+mod tls_tests;
 fn retry_after(s: &str) -> Option<Duration> {
     s.parse().ok().map(Duration::from_secs).or_else(|| {
         httpdate::parse_http_date(s)

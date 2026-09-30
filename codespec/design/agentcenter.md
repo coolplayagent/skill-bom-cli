@@ -52,9 +52,13 @@ accepted. HTTP 400/401/403, empty/null responses and business 40100/40300 signal
 automatic credentials allow one refresh and read replay, while explicit tokens do not refresh;
 there is no fallback to Git. Non-JSON errors are reported by HTTP status,
 without echoing response bodies. Requests have bounded retries, timeouts and
-response sizes. AgentCenter authenticated requests reject redirects; TLS
-verification remains enabled for non-loopback HTTPS. Credentials are not sent
-to any other origin.
+response sizes. AgentCenter authenticated requests reject redirects. Following
+[Issue #4](https://github.com/coolplayagent/skill-bom-cli/issues/4),
+`AGENTCENTER_VERIFY_TLS` defaults to false for W3 login and AgentCenter detail /
+download requests, including custom registries. Explicit true enforces certificate
+and hostname verification with no fallback. Other HTTPS source requests retain
+strict verification. See [W3 TLS policy](w3-auth.md#tls-compatibility) for risks
+and parsing/error contracts. Credentials are not sent to any other origin.
 
 The download must be ZIP bytes with ZIP or octet-stream content type. Shared
 archive extraction rejects traversal, links, duplicate paths, case collisions
@@ -70,8 +74,7 @@ Unlike RelayAgent's reported list/search flow, this CLI requires an explicit
 skillId and uses direct detail lookup. It does not need the name-deduplicating
 `POST .../skills/v2/query` endpoint, whose list does not provide a complete
 version catalog. This avoids merging distinct skillIds and keeps package
-identity stable. The issue's reported default-disabled TLS and heuristic
-`SKILL.md` root discovery are deliberately not adopted.
+identity stable. Heuristic `SKILL.md` root discovery is deliberately not adopted.
 
 The adapter is a separate `//src/sources:agentcenter` `rust_library` alongside
 other sources. `net` owns GET/POST transport and auth-header confinement;

@@ -42,13 +42,42 @@ The only password destination is
 `https://rnd-idea-api.huawei.com/ideaclientservice/login/v4/secureLogin`.
 POST JSON uses `user`, `password`, and string `requireUserInfo: "true"`, with the
 Content-Type, Accept, Accept-Language and browser User-Agent specified by Issue #3.
-No token accompanies login; TLS certificate validation stays on. Login rejects
+No token accompanies login; the TLS policy below applies. Login rejects
 all redirects, including same-origin and HTTP destinations. The existing bounded
 network policy supplies 30-second attempts, 10-second connection timeout, two
 transient retries and a 90-second retry budget. Login responses are limited to
 1 MiB and must be HTTP 200. HTTP 400/401/403 reject credentials; missing/non-string/
 blank `cloudDragonTokens.authToken` returns MISSING_AUTH_TOKEN. Response bodies
 and keyring diagnostics are never printed. Password/token Debug is redacted.
+
+## TLS compatibility
+
+[Issue #4](https://github.com/coolplayagent/skill-bom-cli/issues/4) reports an
+incomplete internal issuer chain. `AGENTCENTER_VERIFY_TLS` therefore defaults
+to false for W3 login/refresh and AgentCenter X-Auth-Token GET/POST operations,
+including custom AgentCenter registries. It disables certificate and hostname
+verification, which permits interception of passwords, tokens and content even
+though transport remains encrypted. This compatibility mode is for trusted
+internal networks. Explicit true requires verification and never falls back.
+Bearer/archive/ClawHub requests keep a separate strictly verified client;
+Git transport is unaffected. Both modes preserve proxy handling, loopback proxy
+bypass, fixed password destination, rejected redirects and resource limits.
+
+Read the variable through `env` when constructing the HTTP client. Accept
+case-insensitive, trimmed true/false, 1/0, yes/no and on/off; absent means false,
+while empty, malformed and non-Unicode values fail with CONFIG without printing
+the value. This is a process setting, not persisted auth state or a source identity.
+The rustls standard roots remain in use; there is no system-store migration.
+
+Typed rustls errors, including nested I/O causes, become NETWORK_TLS; certificate
+errors have a distinct sanitized message. TLS failures are not retried and never
+trigger credential refresh. Timeouts become NETWORK_TIMEOUT; other transport
+failures remain NETWORK. Classification traverses at most 16 causes and never
+prints raw URLs or backend messages. Login retains the transport hint alongside
+the existing login guidance. Local HTTPS tests use ephemeral certificates and
+exercise both accepted and rejected handshakes; no live internal login is claimed.
+
+## Token lifetime
 
 Positive integer seconds: `cloudDragonTokens.expiresIn`,
 `cloudDragonTokens.authTokenExpiresIn`, and top-level `authTokenExpiresIn`.
