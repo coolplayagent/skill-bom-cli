@@ -225,3 +225,208 @@ fn login_rejects_invalid_tls_setting_before_network_or_credential_storage() {
             .exists()
     );
 }
+
+#[test]
+fn origin_flags_token_input_and_offline_storage_do_not_leak_secrets() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    let origin = "https://registry.example";
+    for args in [
+        vec!["auth", "login", "--origin", origin, "--username", "bob"],
+        vec!["auth", "login", "--origin", origin, "--token-stdin"],
+        vec![
+            "auth",
+            "login",
+            "--origin",
+            origin,
+            "--username",
+            "bob",
+            "--password-stdin",
+        ],
+        vec!["auth", "login", "--username", "alice", "--token-stdin"],
+    ] {
+        let output = run(
+            root,
+            &args
+                .into_iter()
+                .chain(["--format", "json"])
+                .collect::<Vec<_>>(),
+            "private-token\n",
+        );
+        assert_eq!(error(&output)["code"], "AUTH_INPUT");
+        assert!(!String::from_utf8_lossy(&output.stderr).contains("private-token"));
+    }
+    for input in ["".into(), "bad\rheader\n".into(), "x".repeat(16385)] {
+        let output = run(
+            root,
+            &[
+                "auth",
+                "login",
+                "--origin",
+                origin,
+                "--username",
+                "bob",
+                "--token-stdin",
+                "--format",
+                "json",
+            ],
+            &input,
+        );
+        assert_eq!(error(&output)["code"], "AUTH_INPUT");
+    }
+    for subcommand in ["login", "status", "logout"] {
+        let output = run(
+            root,
+            &[
+                "auth",
+                subcommand,
+                "--origin",
+                "https://user:private-token@example.com",
+                "--format",
+                "json",
+            ],
+            "",
+        );
+        assert_eq!(error(&output)["code"], "URL");
+        assert!(!String::from_utf8_lossy(&output.stderr).contains("private-token"));
+    }
+    assert!(
+        !run(root, &["auth", "status", "--all", "--origin", origin], "")
+            .status
+            .success()
+    );
+    assert!(
+        !run(
+            root,
+            &["auth", "login", "--password-stdin", "--token-stdin"],
+            ""
+        )
+        .status
+        .success()
+    );
+    assert!(!root.join("home/config/auth-v1").exists());
+    #[cfg(target_os = "linux")]
+    {
+        let mut child = command(
+            root,
+            &[
+                "auth",
+                "login",
+                "--offline",
+                "--origin",
+                origin,
+                "--username",
+                "bob",
+                "--token-stdin",
+                "--format",
+                "json",
+            ],
+        )
+        .env(
+            "DBUS_SESSION_BUS_ADDRESS",
+            format!("unix:path={}", root.join("no-bus").display()),
+        )
+        .env("AGENTCENTER_VERIFY_TLS", "invalid-but-unused")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(b"private-token\n")
+            .unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert_eq!(error(&output)["code"], "AUTH_STORE_UNAVAILABLE");
+        assert!(!String::from_utf8_lossy(&output.stderr).contains("private-token"));
+    }
+}
+
+#[test]
+fn origin_status_is_local_sorted_and_logout_leaves_other_origins() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    std::fs::write(root.join("skills.toml"), "invalid TOML").unwrap();
+    let output = run(root, &["auth", "status", "--all", "--format", "json"], "");
+    assert_eq!(
+        serde_json::from_slice::<Value>(&output.stdout).unwrap()["sessions"],
+        serde_json::json!([])
+    );
+    assert!(
+        String::from_utf8_lossy(&run(root, &["auth", "status", "--all"], "").stdout)
+            .contains("No saved logins")
+    );
+    assert!(!root.join("home/config/auth-v1").exists());
+    for origin in ["https://z.example", "https://a.example"] {
+        let directory = root
+            .join("home/config/auth-v1/origins")
+            .join(skill_bom::domain::digest(origin.as_bytes()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let state = serde_json::json!({"origin":origin,"version":1,"session":{
+            "method":"token","username":"bob","issued_at":"2020-01-01T00:00:00Z",
+            "expires_at":null,"expiry_source":null,
+            "credential_ref":"00000000-0000-4000-8000-000000000001",
+            "login_id":"00000000-0000-4000-8000-000000000002"
+        },"cleanup":[]});
+        std::fs::write(
+            directory.join("session.json"),
+            serde_json::to_vec(&state).unwrap(),
+        )
+        .unwrap();
+    }
+    let output = run(
+        root,
+        &["auth", "status", "--all", "--offline", "--format", "json"],
+        "",
+    );
+    assert!(output.status.success());
+    let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let origins = value["sessions"].as_array().unwrap();
+    assert_eq!(origins.len(), 2);
+    assert_eq!(origins[0]["origin"], "https://a.example");
+    assert!(origins[0]["expired"].is_null());
+    assert_eq!(origins[0]["method"], "token");
+    let output = run(
+        root,
+        &["auth", "status", "--origin", "https://A.example:443/"],
+        "",
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("not verified"));
+    let output = run(root, &["auth", "status", "--all"], "");
+    assert!(String::from_utf8_lossy(&output.stdout).contains("https://z.example"));
+    // The missing default login can be logged out without touching any real keyring.
+    assert!(run(root, &["auth", "logout"], "").status.success());
+    let output = run(
+        root,
+        &[
+            "auth",
+            "status",
+            "--origin",
+            "https://a.example",
+            "--format",
+            "json",
+        ],
+        "",
+    );
+    assert_eq!(
+        serde_json::from_slice::<Value>(&output.stdout).unwrap()["logged_in"],
+        true
+    );
+    let output = run(
+        root,
+        &["auth", "status", "--origin", "https://missing.example"],
+        "",
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("No local token login"));
+    assert!(
+        run(
+            root,
+            &["auth", "logout", "--origin", "https://missing.example"],
+            ""
+        )
+        .status
+        .success()
+    );
+}

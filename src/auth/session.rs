@@ -1,12 +1,12 @@
 //! Journaled metadata and a bounded process lock for login, refresh and logout.
 use super::{
-    Credential, CredentialProvider, LoginGateway, LoginResult, Secret, SecretStore, Stamp,
-    check_origin, required, store_unavailable,
+    AGENTCENTER_ORIGIN, Credential, CredentialProvider, LoginGateway, Secret, SecretStore, Stamp,
+    required, required_for, store_unavailable,
 };
 use crate::{
     domain::{
         Result,
-        auth::{AuthStatus, Session, SessionState},
+        auth::{AuthMethod, AuthStatus, Session, SessionState},
     },
     env::Clock,
     paths,
@@ -18,18 +18,42 @@ pub struct Sessions {
     root: PathBuf,
     namespace: String,
     lock_timeout: Duration,
+    origin: String,
 }
 impl Sessions {
     pub fn new(config_root: &Path) -> Result<Self> {
+        Self::for_origin(config_root, AGENTCENTER_ORIGIN)
+    }
+    pub fn for_origin(config_root: &Path, origin: &str) -> Result<Self> {
+        let origin = crate::config::auth_origin(origin)?;
         let root = paths::absolute(config_root).map_err(|_| store_unavailable())?;
+        let config_hash = crate::domain::digest(root.as_os_str().as_encoded_bytes());
+        let origin_hash = crate::domain::digest(origin.as_bytes());
+        let official = origin == AGENTCENTER_ORIGIN;
         Ok(Self {
-            namespace: format!(
-                "org.skill-bom.w3.v1.{}",
-                crate::domain::digest(root.as_os_str().as_encoded_bytes())
-            ),
-            root: root.join("auth-v1"),
+            namespace: if official {
+                format!("org.skill-bom.w3.v1.{config_hash}")
+            } else {
+                format!("org.skill-bom.auth.v1.{config_hash}.{origin_hash}")
+            },
+            root: if official {
+                root.join("auth-v1")
+            } else {
+                root.join("auth-v1/origins").join(origin_hash)
+            },
             lock_timeout: Duration::from_secs(100),
+            origin,
         })
+    }
+    pub fn origin(&self) -> &str {
+        &self.origin
+    }
+    pub fn method(&self) -> AuthMethod {
+        if self.origin == AGENTCENTER_ORIGIN {
+            AuthMethod::W3
+        } else {
+            AuthMethod::Token
+        }
     }
     pub fn with_lock_timeout(mut self, timeout: Duration) -> Self {
         self.lock_timeout = timeout.min(Duration::from_secs(120));
@@ -44,7 +68,16 @@ impl Sessions {
         Service {
             sessions: self,
             secrets,
-            gateway,
+            gateway: Some(gateway),
+            clock,
+        }
+    }
+    /// Token storage and acquisition never construct a login gateway or HTTP client.
+    pub fn tokens<'a>(&'a self, secrets: &'a dyn SecretStore, clock: &'a dyn Clock) -> Service<'a> {
+        Service {
+            sessions: self,
+            secrets,
+            gateway: None,
             clock,
         }
     }
@@ -52,19 +85,31 @@ impl Sessions {
         let path = self.root.join("session.json");
         paths::no_symlink(&path).map_err(|_| store_unavailable())?;
         if !path.try_exists().map_err(|_| store_unavailable())? {
-            return Ok(SessionState::default());
+            return Ok(SessionState {
+                origin: (self.method() == AuthMethod::Token).then(|| self.origin.clone()),
+                ..SessionState::default()
+            });
         }
         let bytes = paths::read(&path, 32768).map_err(|_| store_unavailable())?;
         let state: SessionState =
             serde_json::from_slice(&bytes).map_err(|_| store_unavailable())?;
         let valid_ref = |s: &str| uuid::Uuid::parse_str(s).is_ok_and(|id| id.to_string() == s);
-        if state.cleanup.len() > 4
+        let expected_origin = (self.method() == AuthMethod::Token).then_some(self.origin.as_str());
+        if state.origin.as_deref() != expected_origin
+            || state.cleanup.len() > 4
             || state.cleanup.iter().any(|r| !valid_ref(r))
             || state.session.as_ref().is_some_and(|s| {
                 !valid_ref(&s.credential_ref)
                     || !valid_ref(&s.login_id)
                     || state.cleanup.contains(&s.credential_ref)
-                    || s.expires_at <= s.issued_at
+                    || s.method != self.method()
+                    || match s.method {
+                        AuthMethod::W3 => {
+                            s.expires_at.is_none_or(|expires| expires <= s.issued_at)
+                                || s.expiry_source.is_none()
+                        }
+                        AuthMethod::Token => s.expires_at.is_some() || s.expiry_source.is_some(),
+                    }
                     || !valid_username(&s.username)
             })
         {
@@ -105,16 +150,69 @@ impl Sessions {
     pub fn status(&self, clock: &dyn Clock) -> Result<AuthStatus> {
         let state = self.read()?;
         Ok(AuthStatus {
+            origin: self.origin.clone(),
+            method: self.method(),
             logged_in: state.session.is_some(),
             username: state.session.as_ref().map(|s| s.username.clone()),
-            expires_at: state.session.as_ref().map(|s| s.expires_at),
-            expiry_source: state.session.as_ref().map(|s| s.expiry_source),
-            expired: state
-                .session
-                .as_ref()
-                .is_some_and(|s| s.expires_at <= clock.now()),
+            expires_at: state.session.as_ref().and_then(|s| s.expires_at),
+            expiry_source: state.session.as_ref().and_then(|s| s.expiry_source),
+            expired: self.method().is_w3().then(|| {
+                state
+                    .session
+                    .as_ref()
+                    .is_some_and(|s| s.expires_at.is_some_and(|expires| expires <= clock.now()))
+            }),
             cleanup_pending: !state.cleanup.is_empty(),
         })
+    }
+    pub fn all_statuses(config_root: &Path, clock: &dyn Clock) -> Result<Vec<AuthStatus>> {
+        let official = Self::new(config_root)?;
+        let mut statuses = vec![];
+        let status = official.status(clock)?;
+        if status.logged_in || status.cleanup_pending {
+            statuses.push(status);
+        }
+        let directory = official.root.join("origins");
+        paths::no_symlink(&directory).map_err(|_| store_unavailable())?;
+        if !directory.try_exists().map_err(|_| store_unavailable())? {
+            return Ok(statuses);
+        }
+        for (index, entry) in std::fs::read_dir(&directory)
+            .map_err(|_| store_unavailable())?
+            .enumerate()
+        {
+            if index >= 1024 {
+                return Err(crate::domain::Error::new(
+                    "RESOURCE_LIMIT",
+                    "Authentication catalog exceeds 1024 origins",
+                    2,
+                ));
+            }
+            let entry = entry.map_err(|_| store_unavailable())?;
+            if !entry.file_type().map_err(|_| store_unavailable())?.is_dir() {
+                return Err(store_unavailable());
+            }
+            let path = entry.path().join("session.json");
+            paths::no_symlink(&path).map_err(|_| store_unavailable())?;
+            if !path.try_exists().map_err(|_| store_unavailable())? {
+                continue;
+            }
+            let bytes = paths::read(&path, 32768).map_err(|_| store_unavailable())?;
+            let state: SessionState =
+                serde_json::from_slice(&bytes).map_err(|_| store_unavailable())?;
+            let origin = state.origin.ok_or_else(store_unavailable)?;
+            let sessions =
+                Self::for_origin(config_root, &origin).map_err(|_| store_unavailable())?;
+            if sessions.root != entry.path() {
+                return Err(store_unavailable());
+            }
+            let status = sessions.status(clock)?;
+            if status.logged_in || status.cleanup_pending {
+                statuses.push(status);
+            }
+        }
+        statuses.sort_by(|a, b| a.origin.cmp(&b.origin));
+        Ok(statuses)
     }
     pub fn logout(&self, secrets: &dyn SecretStore) -> Result<()> {
         let _guard = self.lock()?;
@@ -132,7 +230,11 @@ impl Sessions {
             return Ok(());
         }
         for reference in &state.cleanup {
-            for kind in ["password", "token"] {
+            for kind in if self.method().is_w3() {
+                &["password", "token"][..]
+            } else {
+                &["token"][..]
+            } {
                 secrets
                     .delete(&self.namespace, &format!("{reference}.{kind}"))
                     .map_err(|_| store_unavailable())?;
@@ -146,12 +248,13 @@ impl Sessions {
 pub struct Service<'a> {
     sessions: &'a Sessions,
     secrets: &'a dyn SecretStore,
-    gateway: &'a dyn LoginGateway,
+    gateway: Option<&'a dyn LoginGateway>,
     clock: &'a dyn Clock,
 }
 impl Service<'_> {
     pub fn login(&self, username: &str, password: &Secret) -> Result<AuthStatus> {
-        if !valid_username(username)
+        if !self.sessions.method().is_w3()
+            || !valid_username(username)
             || password.expose().is_empty()
             || password.expose().len() > 4096
         {
@@ -163,29 +266,63 @@ impl Service<'_> {
         let mut state = self.sessions.read()?;
         self.sessions.cleanup(&mut state, self.secrets)?;
         let now = self.clock.now();
-        let result = self.gateway.login(username, password, now)?;
+        let result = self
+            .gateway
+            .ok_or_else(|| required("W3 login gateway is required"))?
+            .login(username, password, now)?;
         let session = Session {
+            method: AuthMethod::W3,
             username: username.into(),
             issued_at: now,
-            expires_at: result.expires_at,
-            expiry_source: result.expiry_source,
+            expires_at: Some(result.expires_at),
+            expiry_source: Some(result.expiry_source),
             credential_ref: uuid::Uuid::new_v4().to_string(),
             login_id: uuid::Uuid::new_v4().to_string(),
         };
-        self.publish(&mut state, session, password, &result)?;
+        self.publish(
+            &mut state,
+            session,
+            &[("password", password), ("token", &result.token)],
+        )?;
+        self.sessions.status(self.clock)
+    }
+    pub fn login_token(&self, username: &str, token: &Secret) -> Result<AuthStatus> {
+        if self.sessions.method() != AuthMethod::Token
+            || !valid_username(username)
+            || !super::valid_token(token.expose())
+        {
+            return Err(crate::domain::Error::new(
+                "AUTH_INPUT",
+                "Token login requires a non-W3 origin, an account name and a valid bounded token",
+                2,
+            )
+            .phase("authentication"));
+        }
+        let _guard = self.sessions.lock()?;
+        let mut state = self.sessions.read()?;
+        self.sessions.cleanup(&mut state, self.secrets)?;
+        let session = Session {
+            method: AuthMethod::Token,
+            username: username.into(),
+            issued_at: self.clock.now(),
+            expires_at: None,
+            expiry_source: None,
+            credential_ref: uuid::Uuid::new_v4().to_string(),
+            login_id: uuid::Uuid::new_v4().to_string(),
+        };
+        self.publish(&mut state, session, &[("token", token)])?;
         self.sessions.status(self.clock)
     }
     fn publish(
         &self,
         state: &mut SessionState,
         session: Session,
-        password: &Secret,
-        result: &LoginResult,
+        entries: &[(&str, &Secret)],
     ) -> Result<()> {
         // Journal the new reference first. Interrupted writes stay discoverable by logout.
         state.cleanup.push(session.credential_ref.clone());
         self.sessions.write(state)?;
-        for (kind, secret) in [("password", password), ("token", &result.token)] {
+        for (kind, secret) in entries {
             self.secrets
                 .set(
                     &self.sessions.namespace,
@@ -210,16 +347,18 @@ impl Service<'_> {
             )
             .map_err(|_| store_unavailable())?
             .filter(|secret| !secret.expose().is_empty())
-            .ok_or_else(|| required("The local W3 credential is missing"))
+            .ok_or_else(|| required_for(&self.sessions.origin, "The local credential is missing"))
     }
     fn credential(&self, state: &SessionState) -> Result<Credential> {
         let session = state
             .session
             .as_ref()
-            .ok_or_else(|| required("No local W3 login"))?;
+            .ok_or_else(|| required_for(&self.sessions.origin, "No local login"))?;
         Ok(Credential {
             token: self.get(session, "token")?,
             stamp: Some(Stamp {
+                origin: self.sessions.origin.clone(),
+                method: session.method,
                 version: state.version,
                 login_id: session.login_id.clone(),
             }),
@@ -235,6 +374,7 @@ impl Service<'_> {
         let now = self.clock.now();
         let result = self
             .gateway
+            .ok_or_else(|| required("W3 login gateway is required"))?
             .login(&session.username, &password, now)
             .map_err(|error| {
                 // A gateway failure must never echo the password, token or response body.
@@ -243,37 +383,77 @@ impl Service<'_> {
                     .hint(super::LOGIN_HINT)
             })?;
         session.issued_at = now;
-        session.expires_at = result.expires_at;
-        session.expiry_source = result.expiry_source;
+        session.expires_at = Some(result.expires_at);
+        session.expiry_source = Some(result.expiry_source);
         session.credential_ref = uuid::Uuid::new_v4().to_string();
-        self.publish(state, session, &password, &result)?;
+        self.publish(
+            state,
+            session,
+            &[("password", &password), ("token", &result.token)],
+        )?;
         self.credential(state)
+    }
+    fn check_scope(&self, origin: &str) -> Result<()> {
+        if crate::config::auth_origin(origin).ok().as_deref() == Some(self.sessions.origin.as_str())
+        {
+            Ok(())
+        } else {
+            Err(crate::domain::Error::new(
+                "MISSING_AUTH_TOKEN",
+                "Credential provider belongs to a different origin",
+                2,
+            )
+            .phase("authentication"))
+        }
     }
 }
 impl CredentialProvider for Service<'_> {
     fn acquire(&self, origin: &str, explicit: Option<String>) -> Result<Credential> {
+        self.acquire_optional(origin, explicit)?
+            .ok_or_else(|| required_for(origin, "No local login"))
+    }
+    fn acquire_optional(
+        &self,
+        origin: &str,
+        explicit: Option<String>,
+    ) -> Result<Option<Credential>> {
         if let Some(token) = explicit.filter(|t| !t.is_empty()) {
-            return Ok(Credential::explicit(token));
+            return Ok(Some(Credential::explicit(token)));
         }
-        check_origin(origin)?;
+        self.check_scope(origin)?;
+        // Public registries need no keyring or directory creation when not logged in.
+        if self.sessions.read()?.session.is_none() {
+            return Ok(None);
+        }
         let _guard = self.sessions.lock()?;
         let mut state = self.sessions.read()?;
-        let session = state
-            .session
-            .as_ref()
-            .ok_or_else(|| required("No local W3 login"))?;
+        let Some(session) = state.session.as_ref() else {
+            return Ok(None);
+        };
         if session.refresh_due(self.clock.now()) {
-            self.renew(&mut state)
+            self.renew(&mut state).map(Some)
         } else {
-            self.credential(&state)
+            self.credential(&state).map(Some)
         }
     }
     fn refresh(&self, origin: &str, rejected: &Credential) -> Result<Credential> {
-        check_origin(origin)?;
+        self.check_scope(origin)?;
+        if !rejected.can_refresh() {
+            return Err(required_for(
+                origin,
+                "Token credentials cannot be refreshed",
+            ));
+        }
         let stamp = rejected
             .stamp
             .as_ref()
             .ok_or_else(|| required("Explicit tokens are never refreshed"))?;
+        if stamp.origin != self.sessions.origin {
+            return Err(required_for(
+                origin,
+                "Rejected credential belongs to a different origin",
+            ));
+        }
         let _guard = self.sessions.lock()?;
         let mut state = self.sessions.read()?;
         let current = state

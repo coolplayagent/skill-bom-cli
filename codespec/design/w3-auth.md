@@ -2,7 +2,7 @@
 
 Implements C + B from [Issue #3](https://github.com/coolplayagent/skill-bom-cli/issues/3):
 an injectable credential provider and built-in password login for skill-bom's own
-single account. Other applications' credentials are neither read nor modified.
+one account per origin. Other applications' credentials are neither read nor modified.
 
 ## Boundaries and storage
 
@@ -92,7 +92,7 @@ a backward local clock jump also requests reauthentication.
 
 A nonempty configured token_env wins and is never persisted, replaced or
 refreshed. Missing/empty values use the saved login only for the exact HTTPS
-origin `agent.huawei.com:443`. Custom registries require an explicit token.
+origin `agent.huawei.com:443`. Other origins use their own stored tokens or token_env; W3 credentials never cross into those origins. See the origin extension below.
 Authenticated AgentCenter requests reject redirects. HTTP 400/401/403, empty or
 JSON null responses and the existing business authentication codes permit one
 refresh. Detail GET and download POST are explicitly reads and may be replayed
@@ -110,3 +110,42 @@ expiry source, expired and pending-cleanup flags; it does not prove server valid
 `auth logout` is idempotent, with no success output on failure. All commands
 support text/JSON; spdx-json remains BOM-only. See [errors](errors.md) and
 [verification evidence](../test/skill-bom-cli.md).
+
+
+## Origin-bound account extension (0.0.7)
+
+Auth commands accept --origin, defaulting to https://agent.huawei.com. Origins
+are canonical scheme/host/effective-port identities, without URL credentials,
+paths, queries or fragments; HTTPS is required except loopback HTTP fixtures.
+ClawHub base paths use the registry origin for lookup. Each origin has one
+account; replacing or deleting it leaves other origins unchanged.
+
+Official AgentCenter retains auth-v1/session.json, session.lock and the existing
+W3 keyring namespace. Its serialized fields remain readable without migration.
+Other origins use auth-v1/origins/<sha256-origin>/ with independent locks, revisions,
+login IDs, cleanup journals and a config-root/origin-scoped keyring namespace.
+Their metadata binds the exact origin and method: token. Expiry fields are null.
+Catalog reads examine at most 1024 origin entries and bound each record to 32 KiB;
+corrupt or misbound metadata fails closed. Status creates no files or locks.
+
+Token login uses hidden input or --username plus --token-stdin; it never constructs
+a login gateway, validates remotely or claims known expiry. The account name is
+user-supplied metadata. Printable nonblank ASCII tokens are bounded to 16384 bytes.
+Input flags must match the origin's method. Token storage works offline; W3 does
+not. Secrets use the same journaled publication and keyring-only policy. Token
+cleanup deletes only token entries, including interrupted publications.
+
+Credential stamps include origin and method alongside version/login identity.
+Only W3 credentials can refresh. Saved tokens fail on authentication rejection
+with an origin-specific login hint and are never replayed or replaced implicitly.
+Nonempty token_env still wins without reading metadata or the keyring. Both
+AgentCenter and ClawHub acquire through the provider; absent ClawHub credentials
+permit anonymous access. ClawHub's GitHub handoff still carries no registry token.
+HTTP 401 on the original Bearer request is an authentication signal; existing
+blocked-source and redirect policies remain in force.
+
+Status JSON adds origin and method (w3/token), retaining the W3 fields and values.
+Token expiry, expiry source and expired are null. --all returns a sorted sessions
+array of saved logins and pending cleanup records; it conflicts with --origin.
+Logout defaults to official AgentCenter, never all origins. A missing local login
+is not remote evidence, and logged_in means only a local session is recorded.

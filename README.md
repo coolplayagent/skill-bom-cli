@@ -62,10 +62,15 @@ conventional `git` user and existing Git credentials. A registry's `token_env`
 selects its Bearer or AgentCenter token; the value is never serialized or sent across origins.
 
 `skill-bom auth login` prompts for a W3 username and a hidden password. Scripted
-login uses `--username NAME --password-stdin`. Passwords and tokens are kept in
-skill-bom's own system keyring entries, isolated by the user config root.
-`auth status` reports local metadata only; `auth logout` clears these credentials.
-Automatic tokens are confined to `https://agent.huawei.com`. Linux requires an
+login uses `--username NAME --password-stdin`. Other registries use
+`auth login --origin URL --username NAME`, with hidden token input or
+`--token-stdin`. Each origin keeps one account independently; saved tokens are
+local credentials with unknown expiry, not verified remote logins. Passwords
+and tokens use skill-bom's own system keyring entries, isolated by config root
+and origin. `auth status --all` lists local metadata; `auth logout --origin URL`
+clears only that origin. Omitted origins retain the official AgentCenter default.
+W3 tokens are confined to `https://agent.huawei.com`. See
+[origin accounts](docs/02-user-guide/06-authentication.md). Linux requires an
 available Secret Service; headless CI can continue to use `token_env`.
 Loopback HTTP is allowed for local tests; remote archives/registries require HTTPS.
 

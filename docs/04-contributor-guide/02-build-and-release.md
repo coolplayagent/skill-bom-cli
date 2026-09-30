@@ -15,6 +15,10 @@ bazel test --lockfile_mode=error //...
 
 跨平台发布包要在对应 runner 上执行二进制 smoke test。不要把某一平台的构建成功描述为所有平台已经运行验证。
 
+`references/` 随 Skill 递归打包，Bazel 显式声明它为构建输入。Rust 发布测试
+校验包内引用、文件字节和嵌套资源，以及固定输入两次打包的一致性；必需文档
+缺失时打包失败。正式发布也检查四份参考文档与每个平台二进制均在归档中。
+
 文档站使用 mdBook 0.5.4 和根目录的 `book.toml`。本地运行 `mdbook build`，
 输出位于 `target/book/`。`docs/SUMMARY.md` 声明全部章节；Rust 文档检查验证
 目录覆盖、内部链接和指向仓库文件的链接。`scripts/check-book.rs` 在发布前检查

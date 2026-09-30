@@ -13,6 +13,7 @@ pub use login::W3_LOGIN_URL;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum AuthMode {
     Bearer,
+    RegistryBearer,
     XAuth,
     Login,
 }
@@ -60,6 +61,9 @@ impl Http {
     pub fn get(&self, url: &str, token: Option<&str>) -> Result<Response> {
         self.request(Method::GET, url, None, token, AuthMode::Bearer)
     }
+    pub fn get_registry(&self, url: &str, token: Option<&str>) -> Result<Response> {
+        self.request(Method::GET, url, None, token, AuthMode::RegistryBearer)
+    }
     pub fn get_x_auth(&self, url: &str, token: &str) -> Result<Response> {
         self.request(Method::GET, url, None, Some(token), AuthMode::XAuth)
     }
@@ -97,7 +101,7 @@ impl Http {
                 ));
             }
             // Only W3 login and AgentCenter's X-Auth-Token operations use this policy.
-            let (remote, local) = if mode != AuthMode::Bearer
+            let (remote, local) = if matches!(mode, AuthMode::XAuth | AuthMode::Login)
                 && let Some((remote, local)) = &self.agentcenter
             {
                 (remote, local)
@@ -144,7 +148,7 @@ impl Http {
                 }
             };
             if res.status().is_redirection() {
-                if mode != AuthMode::Bearer {
+                if matches!(mode, AuthMode::XAuth | AuthMode::Login) {
                     return fail("PROTOCOL", "Authentication redirects are not accepted");
                 }
                 redirects += 1;
@@ -204,7 +208,12 @@ impl Http {
             }
             if !res.status().is_success() {
                 let status = res.status().as_u16();
-                if mode != AuthMode::Bearer && matches!(status, 400 | 401 | 403) {
+                if (matches!(mode, AuthMode::XAuth | AuthMode::Login)
+                    && matches!(status, 400 | 401 | 403))
+                    || (mode == AuthMode::RegistryBearer
+                        && status == 401
+                        && current.origin() == original.origin())
+                {
                     return Err(Error::new("AUTH_REQUIRED", "Authentication was rejected", 2)
                         .phase("authentication")
                         .hint("Run skill-bom auth login, or replace the explicit token_env value."));
@@ -272,6 +281,14 @@ fn retry_after(s: &str) -> Option<Duration> {
 /// Injectable HTTP boundary used by source contract tests and embedding applications.
 pub trait Transport {
     fn get(&self, url: &str, token: Option<&str>) -> Result<Response>;
+    fn get_registry(&self, url: &str, token: Option<&str>) -> Result<Response> {
+        self.get(url, token)
+    }
+    fn registry_json(&self, url: &str, token: Option<&str>) -> Result<serde_json::Value> {
+        let response = self.get_registry(url, token)?;
+        serde_json::from_slice(&response.bytes)
+            .map_err(|_| Error::new("PROTOCOL", "Expected JSON response", 2))
+    }
     fn secure_login(&self, _username: &str, _password: &str) -> Result<Response> {
         Err(Error::new(
             "PROTOCOL",
@@ -300,6 +317,9 @@ pub trait Transport {
     }
 }
 impl Transport for Http {
+    fn get_registry(&self, url: &str, token: Option<&str>) -> Result<Response> {
+        Http::get_registry(self, url, token)
+    }
     fn secure_login(&self, username: &str, password: &str) -> Result<Response> {
         Http::secure_login(self, username, password)
     }

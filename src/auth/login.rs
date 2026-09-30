@@ -38,7 +38,7 @@ impl<T: Transport + ?Sized> LoginGateway for W3Gateway<'_, T> {
                 Error::new("MISSING_AUTH_TOKEN", "W3 login returned no authToken", 2)
                     .hint(LOGIN_HINT)
             })?;
-        if token.len() > 16384 || !token.bytes().all(|b| (0x20..=0x7e).contains(&b)) {
+        if !super::valid_token(token) {
             return Err(required("W3 login returned an unusable authToken"));
         }
         let (expires_at, expiry_source) = expiry(&value, now);

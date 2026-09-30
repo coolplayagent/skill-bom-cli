@@ -11,10 +11,14 @@ skill_dir=$2
 shift 2
 test -f "$skill_dir/SKILL.md"
 test -f "$skill_dir/skill.toml"
+for reference in commands configuration authentication troubleshooting; do
+  test -s "$skill_dir/references/$reference.md"
+done
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 mkdir -p "$stage/skill-bom-cli/assets"
 cp "$skill_dir/SKILL.md" "$skill_dir/skill.toml" "$stage/skill-bom-cli/"
+cp -R "$skill_dir/references" "$stage/skill-bom-cli/"
 
 while (( $# > 0 )); do
   os=$1

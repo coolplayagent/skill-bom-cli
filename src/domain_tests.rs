@@ -57,10 +57,11 @@ fn auth_expiry_and_refresh_are_pure() {
     assert_eq!(expires_at, now + chrono::Duration::hours(4));
     assert_eq!(expiry_source, ExpirySource::LocalPolicy);
     let session = Session {
+        method: auth::AuthMethod::W3,
         username: "alice".into(),
         issued_at: now,
-        expires_at,
-        expiry_source,
+        expires_at: Some(expires_at),
+        expiry_source: Some(expiry_source),
         credential_ref: "reference".into(),
         login_id: "login".into(),
     };
@@ -73,6 +74,14 @@ fn auth_expiry_and_refresh_are_pure() {
     );
     assert_eq!(source, ExpirySource::Server);
     assert_eq!(expires_at, now + chrono::Duration::seconds(20));
+    let token = Session {
+        method: auth::AuthMethod::Token,
+        expires_at: None,
+        expiry_source: None,
+        ..session
+    };
+    assert!(!token.refresh_due(now + chrono::Duration::hours(200)));
+    assert!(!token.refresh_due(now - chrono::Duration::hours(1)));
 }
 #[test]
 fn auth_expiry_overflow_is_checked_without_discarding_usable_server_values() {

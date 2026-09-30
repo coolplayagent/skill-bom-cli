@@ -40,6 +40,7 @@ fn self_signed_tls_policy_covers_login_detail_and_download_only() {
         strict.get_x_auth(&server.url, "fixture-token"),
         strict.post_json(&server.url, &serde_json::json!({}), "fixture-token"),
         compatible.get(&server.url, Some("fixture-token")),
+        compatible.get_registry(&server.url, Some("fixture-token")),
         strict.get(&server.url, None),
     ] {
         let error = result.err().unwrap();
@@ -56,7 +57,7 @@ fn self_signed_tls_policy_covers_login_detail_and_download_only() {
     }
     assert_eq!(server.requests.load(Ordering::SeqCst), 3);
     // Certificate failures are terminal and never downgraded or retried.
-    assert_eq!(server.connections.load(Ordering::SeqCst), 8);
+    assert_eq!(server.connections.load(Ordering::SeqCst), 9);
 }
 
 fn trusted(server: &Server, timeout: Duration) -> Http {

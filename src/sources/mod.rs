@@ -92,9 +92,13 @@ impl SourceProvider for Provider<'_> {
                 selector: request.request(),
             }],
             Source::Git { repository, .. } => git::candidates(repository, request)?,
-            Source::Clawhub { .. } => {
-                clawhub::candidates(&self.http, self.manifest, source, request)?
-            }
+            Source::Clawhub { .. } => clawhub::candidates_with_auth(
+                &self.http,
+                self.credentials.as_ref(),
+                self.manifest,
+                source,
+                request,
+            )?,
             Source::Agentcenter { .. } => agentcenter::candidates_with_auth(
                 &self.http,
                 self.credentials.as_ref(),
@@ -151,9 +155,14 @@ impl SourceProvider for Provider<'_> {
                     Evidence::default(),
                 )
             }
-            Source::Clawhub { .. } => {
-                clawhub::fetch(&self.http, self.manifest, source, candidate, temp.path())?
-            }
+            Source::Clawhub { .. } => clawhub::fetch_with_auth(
+                &self.http,
+                self.credentials.as_ref(),
+                self.manifest,
+                source,
+                candidate,
+                temp.path(),
+            )?,
             Source::Agentcenter { .. } => agentcenter::fetch_with_auth(
                 &self.http,
                 self.credentials.as_ref(),

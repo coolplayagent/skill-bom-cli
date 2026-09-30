@@ -1,6 +1,12 @@
 //! ClawHub contract baseline: 826992bd72b9f9ab09254dc43551facdf94cb07b.
 use crate::domain::*;
-use crate::{config::Manifest, env, net::Transport, paths, store};
+use crate::{
+    auth::{self, Credential, CredentialProvider, SystemProvider},
+    config::{self, Manifest},
+    env,
+    net::Transport,
+    paths, store,
+};
 use serde_json::Value;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -21,9 +27,29 @@ fn token(manifest: &Manifest, registry: &str) -> Option<String> {
     manifest
         .registries
         .values()
-        .find(|r| r.url.trim_end_matches('/') == registry)
+        .find(|r| r.kind == "clawhub" && config::web_url(&r.url).ok().as_deref() == Some(registry))
         .and_then(|r| r.token_env.as_ref())
         .and_then(|key| env::variable(key))
+        .filter(|value| !value.is_empty())
+}
+fn request<T>(
+    registry: &str,
+    credential: Option<&Credential>,
+    send: impl FnOnce(Option<&str>) -> Result<T>,
+) -> Result<T> {
+    send(credential.map(|c| c.token.expose())).map_err(|error| {
+        if error.code == "AUTH_REQUIRED" {
+            if credential.is_some_and(Credential::is_explicit) {
+                error.hint("Replace the explicitly configured token_env value.")
+            } else {
+                error.hint(&auth::login_hint(
+                    &config::registry_origin(registry).unwrap_or_default(),
+                ))
+            }
+        } else {
+            error
+        }
+    })
 }
 fn endpoint(source: &Source, suffix: &str, params: &[(&str, &str)]) -> Result<String> {
     let (registry, owner, slug) = parts(source)?;
@@ -43,10 +69,12 @@ fn endpoint(source: &Source, suffix: &str, params: &[(&str, &str)]) -> Result<St
     }
     Ok(url.into())
 }
-fn info(http: &impl Transport, manifest: &Manifest, source: &Source) -> Result<Value> {
+fn info(http: &impl Transport, source: &Source, credential: Option<&Credential>) -> Result<Value> {
     let (registry, owner, slug) = parts(source)?;
-    let t = token(manifest, registry);
-    let value = http.json(&endpoint(source, "", &[])?, t.as_deref())?;
+    let url = endpoint(source, "", &[])?;
+    let value = request(registry, credential, |token| {
+        http.registry_json(&url, token)
+    })?;
     if value.pointer("/owner/handle").and_then(Value::as_str) != Some(owner)
         || value.pointer("/skill/slug").and_then(Value::as_str) != Some(slug)
     {
@@ -70,8 +98,22 @@ pub fn candidates(
     source: &Source,
     request: &Dependency,
 ) -> Result<Vec<Candidate>> {
-    let data = info(http, manifest, source)?;
-    if let Some(tag) = &request.tag {
+    candidates_with_auth(http, &SystemProvider, manifest, source, request)
+}
+pub fn candidates_with_auth(
+    http: &impl Transport,
+    credentials: &dyn CredentialProvider,
+    manifest: &Manifest,
+    source: &Source,
+    dependency: &Dependency,
+) -> Result<Vec<Candidate>> {
+    let (registry, _, _) = parts(source)?;
+    let credential = credentials.acquire_optional(
+        &config::registry_origin(registry)?,
+        token(manifest, registry),
+    )?;
+    let data = info(http, source, credential.as_ref())?;
+    if let Some(tag) = &dependency.tag {
         let version = data
             .get("skill")
             .and_then(|s| s.get("tags"))
@@ -108,8 +150,6 @@ pub fn candidates(
             selector: tag.clone(),
         }]);
     }
-    let (registry, _, _) = parts(source)?;
-    let t = token(manifest, registry);
     let mut cursor = String::new();
     let mut cursors = BTreeSet::new();
     let mut versions = BTreeSet::new();
@@ -119,7 +159,10 @@ pub fn candidates(
         if !cursor.is_empty() {
             params.push(("cursor", &cursor));
         }
-        let page = http.json(&endpoint(source, "/versions", &params)?, t.as_deref())?;
+        let url = endpoint(source, "/versions", &params)?;
+        let page = request(registry, credential.as_ref(), |token| {
+            http.registry_json(&url, token)
+        })?;
         let items = page
             .get("items")
             .and_then(Value::as_array)
@@ -168,14 +211,27 @@ pub fn fetch(
     candidate: &Candidate,
     dest: &Path,
 ) -> Result<(PathBuf, Candidate, Evidence)> {
-    let data = info(http, manifest, source)?;
+    fetch_with_auth(http, &SystemProvider, manifest, source, candidate, dest)
+}
+pub fn fetch_with_auth(
+    http: &impl Transport,
+    credentials: &dyn CredentialProvider,
+    manifest: &Manifest,
+    source: &Source,
+    candidate: &Candidate,
+    dest: &Path,
+) -> Result<(PathBuf, Candidate, Evidence)> {
     let (registry, _, slug) = parts(source)?;
-    let t = token(manifest, registry);
+    let credential = credentials.acquire_optional(
+        &config::registry_origin(registry)?,
+        token(manifest, registry),
+    )?;
+    let data = info(http, source, credential.as_ref())?;
     let detail = if let Some(version) = &candidate.version {
-        let value = http.json(
-            &endpoint(source, &format!("/versions/{version}"), &[])?,
-            t.as_deref(),
-        )?;
+        let url = endpoint(source, &format!("/versions/{version}"), &[])?;
+        let value = request(registry, credential.as_ref(), |token| {
+            http.registry_json(&url, token)
+        })?;
         if value.pointer("/version/version").and_then(Value::as_str) != Some(version)
             || value.pointer("/skill/slug").and_then(Value::as_str) != Some(slug)
         {
@@ -212,7 +268,10 @@ pub fn fetch(
     } else {
         vec![("tag", candidate.selector.as_str())]
     };
-    let response = http.get(&endpoint(source, "download", &params)?, t.as_deref())?;
+    let url = endpoint(source, "download", &params)?;
+    let response = request(registry, credential.as_ref(), |token| {
+        http.get_registry(&url, token)
+    })?;
     let mut evidence = Evidence {
         scan: Some(Scan {
             status: status.into(),

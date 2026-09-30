@@ -219,6 +219,7 @@ fn docs_examples_and_build_contracts_agree() {
         "auth_protocol",
         "auth_process",
         "auth_cli",
+        "auth_origins",
         "agents",
         "skills",
         "transactions",
@@ -347,6 +348,45 @@ fn book_is_navigable_and_skill_matches_release() {
     assert_eq!(package.package.version, version);
     assert_eq!(package.package.name, "skill-bom-cli");
     assert!(skill.contains(&format!("  version: \"{version}\"")));
+    check_skill_links(&root.join("skills/skill-bom-cli"));
+}
+
+fn check_skill_links(skill_root: &Path) {
+    let root = skill_root.canonicalize().unwrap();
+    let mut all = vec![];
+    files(&root, &mut all);
+    let entrypoint = std::fs::read_to_string(root.join("SKILL.md")).unwrap();
+    for name in [
+        "commands",
+        "configuration",
+        "authentication",
+        "troubleshooting",
+    ] {
+        assert!(entrypoint.contains(&format!("references/{name}.md")));
+    }
+    for file in all
+        .iter()
+        .filter(|file| file.extension().is_some_and(|ext| ext == "md"))
+    {
+        let text = std::fs::read_to_string(file).unwrap();
+        for tail in text.split("](").skip(1) {
+            let target = tail.split_once(')').expect("closed Markdown link").0;
+            let target = target.split('#').next().unwrap();
+            if target.is_empty() || target.contains("://") {
+                continue;
+            }
+            let destination = file
+                .parent()
+                .unwrap()
+                .join(target)
+                .canonicalize()
+                .unwrap_or_else(|_| panic!("broken Skill link {target} from {}", file.display()));
+            assert!(
+                destination.starts_with(&root) && destination.is_file(),
+                "Skill link leaves the release archive"
+            );
+        }
+    }
 }
 #[cfg(target_os = "linux")]
 #[test]
@@ -356,7 +396,21 @@ fn skill_release_archive_is_complete_and_reproducible() {
     let binary = temp.path().join("skill-bom");
     std::fs::write(&binary, b"stand-in executable").unwrap();
     let script = root().join("scripts/package-skill.sh");
-    let skill = root().join("skills/skill-bom-cli");
+    let source = root().join("skills/skill-bom-cli");
+    let skill = temp.path().join("source");
+    let mut source_files = vec![];
+    files(&source, &mut source_files);
+    for file in source_files {
+        let destination = skill.join(file.strip_prefix(&source).unwrap());
+        std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
+        std::fs::copy(file, destination).unwrap();
+    }
+    std::fs::create_dir_all(skill.join("references/nested")).unwrap();
+    std::fs::write(
+        skill.join("references/nested/resource.txt"),
+        b"nested resource bytes\n",
+    )
+    .unwrap();
     let first = temp.path().join("first.tar.gz");
     let second = temp.path().join("second.tar.gz");
     for archive in [&first, &second] {
@@ -376,25 +430,53 @@ fn skill_release_archive_is_complete_and_reproducible() {
     );
     let gz = flate2::read::GzDecoder::new(std::fs::File::open(first).unwrap());
     let mut archive = tar::Archive::new(gz);
-    let names: BTreeSet<_> = archive
+    let contents: BTreeMap<_, _> = archive
         .entries()
         .unwrap()
         .map(|entry| {
-            entry
-                .unwrap()
-                .path()
-                .unwrap()
-                .to_string_lossy()
-                .into_owned()
+            use std::io::Read;
+            let mut entry = entry.unwrap();
+            let name = entry.path().unwrap().to_string_lossy().into_owned();
+            let mut bytes = vec![];
+            entry.read_to_end(&mut bytes).unwrap();
+            (name, bytes)
         })
         .collect();
     for required in [
         "skill-bom-cli/SKILL.md",
         "skill-bom-cli/skill.toml",
         "skill-bom-cli/assets/Linux/X64/skill-bom",
+        "skill-bom-cli/references/commands.md",
+        "skill-bom-cli/references/configuration.md",
+        "skill-bom-cli/references/authentication.md",
+        "skill-bom-cli/references/troubleshooting.md",
+        "skill-bom-cli/references/nested/resource.txt",
     ] {
-        assert!(names.contains(required), "missing {required}");
+        assert!(contents.contains_key(required), "missing {required}");
     }
+    let mut references = vec![];
+    files(&skill.join("references"), &mut references);
+    for file in references {
+        let relative = file
+            .strip_prefix(&skill)
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/");
+        assert_eq!(
+            contents[&format!("skill-bom-cli/{relative}")],
+            std::fs::read(&file).unwrap()
+        );
+    }
+    std::fs::remove_file(skill.join("references/authentication.md")).unwrap();
+    let failed = Command::new("bash")
+        .arg(&script)
+        .arg(temp.path().join("incomplete.tar.gz"))
+        .arg(&skill)
+        .args(["Linux", "X64"])
+        .arg(&binary)
+        .status()
+        .unwrap();
+    assert!(!failed.success());
 }
 #[test]
 fn bom_checksums_unknowns_and_reference_integrity() {

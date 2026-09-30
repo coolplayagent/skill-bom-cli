@@ -3,7 +3,7 @@
 AgentCenter 是可选的内部 Skill 来源。你需要目标服务的访问权限、稳定的
 `skillId`。先运行 `skill-bom auth login`，交互输入 W3 账号和密码；密码不回显。
 登录成功后，CLI 为 `https://agent.huawei.com` 自动注入 `X-Auth-Token`。
-首期只管理 skill-bom 自身的单个账号，不读取其他应用的登录态。
+每个 origin 保存一个 skill-bom 自身的账号，不同站点可以并存；不读取其他应用的登录态。
 
 ```toml
 schema_version = 1
@@ -52,7 +52,8 @@ Linux 没有可用或已解锁的 Secret Service 时返回 `AUTH_STORE_UNAVAILAB
 
 配置的环境变量只要非空就优先使用；变量缺失或为空时，使用持久化登录态。
 显式 token 被拒后，CLI 不刷新、不切换账号、不覆盖环境变量。自定义 Registry
-仍要求显式 token，自动获得的 token 只会发送到 `https://agent.huawei.com`。
+可通过 `auth login --origin URL` 保存自己的 Token；自动获得的 W3 token
+只会发送到 `https://agent.huawei.com`。多站点管理详见[按 origin 登录](06-authentication.md)。
 密码只发送到固定 HTTPS secureLogin 端点；登录和 AgentCenter 请求均拒绝
 重定向。不要把令牌写进 TOML、锁文件、BOM 或参数。
 

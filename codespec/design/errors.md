@@ -27,10 +27,10 @@ AGENT_SKILL_NAME reports a selected client's reserved name. These use exit 1;
 resource-budget exhaustion uses RESOURCE_LIMIT/exit 2. Correct upstream content
 and select a new immutable release instead of editing locked bytes in place.
 
-W3 authentication errors use exit 2. AUTH_INPUT covers invalid input mode,
+Authentication errors use exit 2. AUTH_INPUT covers invalid input mode,
 empty/oversized fields and non-UTF-8 stdin. MISSING_AUTH_TOKEN covers an absent,
-non-string or blank secureLogin authToken and custom registries without an
-explicit token. AUTH_REQUIRED covers no local login, missing saved credentials,
+non-string or blank secureLogin authToken and a credential provider bound to a
+different origin. AUTH_REQUIRED covers no local login, missing saved credentials,
 expired login responses and server authentication rejection. Native keyring,
 metadata and lock failures use AUTH_STORE_UNAVAILABLE, without echoing the
 backend error. Linux Secret Service unavailability never falls back to a file.

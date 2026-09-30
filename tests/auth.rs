@@ -41,7 +41,7 @@ fn login_status_half_life_refresh_and_idempotent_logout() {
     assert_eq!(secrets.entries.lock().unwrap().len(), 2);
     clock.advance(14401);
     let calls = secrets.calls.load(Ordering::SeqCst);
-    assert!(sessions.status(&clock).unwrap().expired);
+    assert_eq!(sessions.status(&clock).unwrap().expired, Some(true));
     assert_eq!(secrets.calls.load(Ordering::SeqCst), calls);
     assert_eq!(gateway.calls.load(Ordering::SeqCst), 2);
     sessions.logout(&secrets).unwrap();
