@@ -42,6 +42,20 @@ fn json(output: Output, code: i32) -> serde_json::Value {
         serde_json::from_slice(&output.stdout).unwrap()
     }
 }
+fn assert_target(value: &serde_json::Value, expected: &Path) {
+    let actual = Path::new(value.as_str().unwrap());
+    assert!(actual.is_absolute());
+    // Resolve existing ancestors without creating a dry-run target. This also
+    // recognizes macOS's trusted /var -> /private/var alias and Windows prefixes.
+    let resolve = |path: &Path| {
+        let ancestor = path.ancestors().find(|p| p.exists()).unwrap();
+        ancestor
+            .canonicalize()
+            .unwrap()
+            .join(path.strip_prefix(ancestor).unwrap())
+    };
+    assert_eq!(resolve(actual), resolve(expected));
+}
 const PRESETS: [(&str, &str, &str); 5] = [
     ("universal", ".agents/skills", ".agents/skills"),
     ("codex", ".agents/skills", ".agents/skills"),
@@ -90,10 +104,7 @@ fn every_agent_discovers_standard_skills_in_both_isolated_scopes() {
             } else {
                 vec!["list", "--format", "json"]
             };
-            assert_eq!(
-                json(run(root, &saved_list), 0)["target"],
-                target.to_str().unwrap()
-            );
+            assert_target(&json(run(root, &saved_list), 0)["target"], &target);
             write_manifest(
                 manifest.parent().unwrap(),
                 &format!("{}/review.zip", server.url),
@@ -102,7 +113,7 @@ fn every_agent_discovers_standard_skills_in_both_isolated_scopes() {
             let mut preview = args.clone();
             preview.extend(["install", "--dry-run"]);
             let plan = json(run(root, &preview), 0);
-            assert_eq!(plan["target"], target.to_str().unwrap());
+            assert_target(&plan["target"], &target);
             assert_eq!(plan["agent"], agent);
             assert!(!target.exists());
             assert!(!manifest.with_extension("lock").exists());
@@ -156,22 +167,22 @@ fn selection_precedence_conflicts_and_init_persistence() {
         run(root, &["init", "--agent", "relayagent", "--format", "json"]),
         0,
     );
-    assert_eq!(
-        json(run(root, &["install", "--format", "json"]), 0)["target"],
-        root.join(".skills").to_str().unwrap()
+    assert_target(
+        &json(run(root, &["install", "--format", "json"]), 0)["target"],
+        &root.join(".skills"),
     );
-    assert_eq!(
-        json(
+    assert_target(
+        &json(
             run(root, &["install", "--agent", "cursor", "--format", "json"]),
-            0
+            0,
         )["target"],
-        root.join(".cursor/skills").to_str().unwrap()
+        &root.join(".cursor/skills"),
     );
     let custom = json(
         run(root, &["install", "--target", "custom", "--format", "json"]),
         0,
     );
-    assert_eq!(custom["target"], root.join("custom").to_str().unwrap());
+    assert_target(&custom["target"], &root.join("custom"));
     assert!(custom["agent"].is_null());
     assert_eq!(
         run(root, &["install", "--agent", "cursor", "--target", "x"])
@@ -188,16 +199,16 @@ fn selection_precedence_conflicts_and_init_persistence() {
         "schema_version=1\n[project]\nname='test'\n[install]\ntarget='old'\n",
     )
     .unwrap();
-    assert_eq!(
-        json(run(root, &["list", "--format", "json"]), 0)["target"],
-        root.join("old").to_str().unwrap()
+    assert_target(
+        &json(run(root, &["list", "--format", "json"]), 0)["target"],
+        &root.join("old"),
     );
-    assert_eq!(
-        json(
+    assert_target(
+        &json(
             run(root, &["list", "--agent", "relayagent", "--format", "json"]),
-            0
+            0,
         )["target"],
-        root.join(".skills").to_str().unwrap()
+        &root.join(".skills"),
     );
     std::fs::write(
         root.join("skills.toml"),
@@ -214,8 +225,8 @@ fn selection_precedence_conflicts_and_init_persistence() {
         run(&nested, &["init", "--target", "chosen", "--format", "json"]),
         0,
     );
-    assert_eq!(
-        json(
+    assert_target(
+        &json(
             run(
                 root,
                 &[
@@ -223,12 +234,12 @@ fn selection_precedence_conflicts_and_init_persistence() {
                     "--manifest",
                     "nested/skills.toml",
                     "--format",
-                    "json"
-                ]
+                    "json",
+                ],
             ),
-            0
+            0,
         )["target"],
-        nested.join("chosen").to_str().unwrap()
+        &nested.join("chosen"),
     );
 }
 
@@ -251,10 +262,7 @@ fn default_change_preserves_legacy_target_and_manifest_digest() {
     let before = std::fs::read(&state_path).unwrap();
     let result = run(root, &["install", "--format", "json"]);
     assert!(String::from_utf8_lossy(&result.stderr).contains("Legacy installation remains"));
-    assert_eq!(
-        json(result, 0)["target"],
-        root.join(".agents/skills").to_str().unwrap()
-    );
+    assert_target(&json(result, 0)["target"], &root.join(".agents/skills"));
     assert_eq!(std::fs::read(&state_path).unwrap(), before);
 }
 
